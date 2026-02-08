@@ -169,6 +169,29 @@ stress-ng --cpu 0 --cpu-method all --timeout 2m --metrics-brief
 
 > **Note:** -120 mV on core/cache caused a crash on this chip. -100 mV passed stress testing with 0 failures, leaving a 20 mV margin from the instability threshold.
 
+### Fn Key Behavior
+
+By default the F-row sends F1-F12 keycodes and requires holding Fn for media keys (volume, brightness, etc.). To invert this so media keys are the default, the `asus_wmi` kernel module `fnlock_default` parameter is set to `N`.
+
+```bash
+# Create dedicated config file
+echo "options asus_wmi fnlock_default=N" | sudo tee /etc/modprobe.d/asus-fnlock.conf
+
+# Update initramfs so it takes effect at boot
+sudo update-initramfs -u -k all
+
+sudo reboot
+```
+
+Verify after reboot:
+
+```bash
+cat /sys/module/asus_wmi/parameters/fnlock_default
+# Should output: N
+```
+
+> **Note:** `Fn+Esc` toggles fnlock on/off per-session. If `fnlock_default=N` gives the wrong behavior on your specific BIOS revision, try `Y` instead — the semantics can be inverted on some ASUS models.
+
 ### Bluetooth Power Saving
 
 ```bash

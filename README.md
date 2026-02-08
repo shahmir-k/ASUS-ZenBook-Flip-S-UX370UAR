@@ -110,6 +110,59 @@ cat /sys/class/power_supply/BAT0/charge_control_end_threshold
 
 > **Note:** Some ASUS laptops silently ignore thresholds other than 40, 60, or 80. If the battery charges past the set limit, change the value to 80.
 
+### Undervolting
+
+The i7-8550U supports undervolting via MSR 0x150 (OC Mailbox) using [intel-undervolt](https://github.com/kitsunyan/intel-undervolt). However, the kernel's early microcode update (`0xf6`) locks the undervolt register as part of the Plundervolt (CVE-2019-11157) mitigation — even though the BIOS (version 300) is pre-patch.
+
+To re-enable undervolting, microcode loading is disabled via GRUB:
+
+```bash
+# In /etc/default/grub:
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr"
+
+sudo update-grub
+sudo reboot
+```
+
+This disables mitigations for SRBDS and GDS, which are local-only attack vectors and low risk on a personal laptop.
+
+After reboot, install and configure intel-undervolt:
+
+```bash
+cd /tmp
+git clone https://github.com/kitsunyan/intel-undervolt.git
+cd intel-undervolt
+./configure --enable-systemd
+make
+sudo make install
+```
+
+Configure `/etc/intel-undervolt.conf` with safe starting values:
+
+```
+undervolt 0 'CPU' -80
+undervolt 1 'GPU' -50
+undervolt 2 'CPU Cache' -80
+undervolt 3 'System Agent' 0
+undervolt 4 'Analog I/O' 0
+```
+
+Apply and verify:
+
+```bash
+sudo intel-undervolt apply
+sudo intel-undervolt read
+```
+
+Enable at boot and after suspend/resume:
+
+```bash
+sudo systemctl enable intel-undervolt.service
+sudo systemctl enable intel-undervolt-loop.service
+```
+
+> **Note:** Stress test with `mprime` (Small FFTs, then Blend) for 1-2 hours before pushing values further. Most i7-8550U chips are stable at -100 to -120 mV on core/cache. Add a 10 mV safety margin from your last stable value.
+
 ### Bluetooth Power Saving
 
 ```bash

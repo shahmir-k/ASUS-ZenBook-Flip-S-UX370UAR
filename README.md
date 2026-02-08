@@ -243,13 +243,12 @@ keycode 232 = F5 XF86MonBrightnessDown
 keycode 72 = XF86MonBrightnessUp F6
 keycode 233 = F6 XF86MonBrightnessUp
 
-! F7 <-> Display off
-keycode 73 = XF86DisplayOff F7
-keycode 253 = F7 XF86DisplayOff
+! F7 <-> Screen lock (Fn+F7 sends KEY_SCREENLOCK / scancode 0x35)
+keycode 73 = XF86ScreenSaver F7
+keycode 160 = F7 XF86ScreenSaver
 
-! F8 <-> Display switch (mirror/extend)
+! F8 - Display switch (Fn+F8 is handled by firmware, no WMI event)
 keycode 74 = XF86Display F8
-keycode 235 = F8 XF86Display
 
 ! F9 <-> Touchpad toggle
 keycode 75 = XF86TouchpadToggle F9
@@ -297,8 +296,8 @@ X-GNOME-Autostart-Delay=3
 | F4 | Keyboard backlight up | F4 |
 | F5 | Display brightness down | F5 |
 | F6 | Display brightness up | F6 |
-| F7 | Display off | F7 |
-| F8 | Display switch (mirror/extend) | F8 |
+| F7 | Screen lock | F7 |
+| F8 | Display switch (firmware-handled, no Fn swap) | F8 |
 | F9 | Touchpad toggle | F9 |
 | F10 | Mute | F10 |
 | F11 | Volume down | F11 |

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Xmodmap Media Keys
+Exec=xmodmap /home/shahmir/.Xmodmap
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3

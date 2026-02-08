@@ -1,0 +1,50 @@
+! Swap F-keys and media keys
+! Without Fn: F-keys send media keysyms
+! With Fn: WMI media keycodes send F-key keysyms
+
+! F1 <-> Sleep
+keycode 67 = XF86Sleep F1
+keycode 150 = F1 XF86Sleep
+
+! F2 <-> Airplane/WLAN
+keycode 68 = XF86RFKill F2
+keycode 255 = F2 XF86RFKill
+
+! F3 <-> Keyboard backlight down
+keycode 69 = XF86KbdBrightnessDown F3
+keycode 237 = F3 XF86KbdBrightnessDown
+
+! F4 <-> Keyboard backlight up
+keycode 70 = XF86KbdBrightnessUp F4
+keycode 238 = F4 XF86KbdBrightnessUp
+
+! F5 <-> Brightness down (xbindkeys routes through script for mute-aware control)
+keycode 71 = XF86MonBrightnessDown F5
+keycode 232 = F5 XF86MonBrightnessDown
+
+! F6 <-> Brightness up (xbindkeys routes through script for mute-aware control)
+keycode 72 = XF86MonBrightnessUp F6
+keycode 233 = F6 XF86MonBrightnessUp
+
+! F7 - Brightness toggle (handled by Cinnamon keybinding -> brightness-toggle.sh)
+! Fn+F7 sends KEY_SCREENLOCK via WMI, remapped to F7
+keycode 160 = F7 XF86ScreenSaver
+
+! F8 - Display switch (Fn+F8 is handled by firmware, no WMI event)
+keycode 74 = XF86Display F8
+
+! F9 <-> Touchpad toggle
+keycode 75 = XF86TouchpadToggle F9
+keycode 199 = F9 XF86TouchpadToggle
+
+! F10 <-> Mute
+keycode 76 = XF86AudioMute F10
+keycode 121 = F10 XF86AudioMute
+
+! F11 <-> Volume down
+keycode 95 = XF86AudioLowerVolume F11
+keycode 122 = F11 XF86AudioLowerVolume
+
+! F12 <-> Volume up
+keycode 96 = XF86AudioRaiseVolume F12
+keycode 123 = F12 XF86AudioRaiseVolume

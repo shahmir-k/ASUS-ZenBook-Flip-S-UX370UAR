@@ -1,0 +1,5 @@
+"/home/shahmir/.local/bin/brightness.sh down"
+  XF86MonBrightnessDown
+
+"/home/shahmir/.local/bin/brightness.sh up"
+  XF86MonBrightnessUp

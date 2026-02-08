@@ -187,8 +187,27 @@ Two issues had to be solved:
 - **`Fn+Esc` toggle** — Not functional on this model.
 - **`asusctl`** — Designed for 2020+ ROG/TUF laptops, not applicable.
 - **`asus-wmi-dkms` / `acpi4asus-dkms`** — Outdated, no UX370-specific patches.
-- **`xbindkeys`** — Cinnamon's key grabs take priority, preventing xbindkeys from intercepting F-keys.
-- **Cinnamon custom keybindings** — Also failed to intercept bare F-keys.
+- **Cinnamon custom keybindings for F5/F6** — Cinnamon's built-in media key handler grabs `XF86MonBrightnessDown`/`Up` at a lower level, preventing custom keybindings from intercepting them.
+
+#### Architecture
+
+The solution has four layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: Kernel — acpi_osi= forces EC to send WMI events  │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: xmodmap — bidirectional F-key / media key swap    │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: Key interception                                  │
+│    ├── xbindkeys → F5/F6 (brightness up/down)              │
+│    └── Cinnamon custom keybinding → F7 (brightness toggle)  │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 4: brightness.sh — D-Bus control with OSD            │
+│    ├── up/down: mute-aware step with bounds checking        │
+│    └── toggle: mute/unmute (save & restore brightness)      │
+└─────────────────────────────────────────────────────────────┘
+```
 
 #### Solution Part 1: `acpi_osi=` Kernel Parameter
 
@@ -216,92 +235,125 @@ With WMI events now reaching X11, both the F-key keycodes (from bare keypresses)
 - Without Fn: F-key keycodes are remapped to media keysyms
 - With Fn: WMI media keycodes are remapped back to F-key keysyms
 
-`~/.Xmodmap`:
-
-```
-! F1 <-> Sleep
-keycode 67 = XF86Sleep F1
-keycode 150 = F1 XF86Sleep
-
-! F2 <-> Airplane/WLAN
-keycode 68 = XF86RFKill F2
-keycode 255 = F2 XF86RFKill
-
-! F3 <-> Keyboard backlight down
-keycode 69 = XF86KbdBrightnessDown F3
-keycode 237 = F3 XF86KbdBrightnessDown
-
-! F4 <-> Keyboard backlight up
-keycode 70 = XF86KbdBrightnessUp F4
-keycode 238 = F4 XF86KbdBrightnessUp
-
-! F5 <-> Brightness down
-keycode 71 = XF86MonBrightnessDown F5
-keycode 232 = F5 XF86MonBrightnessDown
-
-! F6 <-> Brightness up
-keycode 72 = XF86MonBrightnessUp F6
-keycode 233 = F6 XF86MonBrightnessUp
-
-! F7 <-> Screen lock (Fn+F7 sends KEY_SCREENLOCK / scancode 0x35)
-keycode 73 = XF86ScreenSaver F7
-keycode 160 = F7 XF86ScreenSaver
-
-! F8 - Display switch (Fn+F8 is handled by firmware, no WMI event)
-keycode 74 = XF86Display F8
-
-! F9 <-> Touchpad toggle
-keycode 75 = XF86TouchpadToggle F9
-keycode 199 = F9 XF86TouchpadToggle
-
-! F10 <-> Mute
-keycode 76 = XF86AudioMute F10
-keycode 121 = F10 XF86AudioMute
-
-! F11 <-> Volume down
-keycode 95 = XF86AudioLowerVolume F11
-keycode 122 = F11 XF86AudioLowerVolume
-
-! F12 <-> Volume up
-keycode 96 = XF86AudioRaiseVolume F12
-keycode 123 = F12 XF86AudioRaiseVolume
-```
-
-Apply and persist across logins:
+See [`config/.Xmodmap`](config/.Xmodmap) for the full keymap. Install:
 
 ```bash
+cp config/.Xmodmap ~/.Xmodmap
 xmodmap ~/.Xmodmap
 ```
 
-Autostart entry (`~/.config/autostart/xmodmap.desktop`):
+Autostart entry (`~/.config/autostart/xmodmap.desktop`) to persist across logins:
 
-```ini
-[Desktop Entry]
-Type=Application
-Name=Xmodmap Media Keys
-Exec=xmodmap /home/shahmir/.Xmodmap
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-X-GNOME-Autostart-Delay=3
+```bash
+cp config/xmodmap.desktop ~/.config/autostart/
 ```
+
+#### Solution Part 3: Brightness Control via `xbindkeys` + D-Bus
+
+Brightness keys (F5/F6) need special handling because they support a **brightness mute** feature (F7). Cinnamon's built-in brightness handler doesn't know about the mute state, so it was disabled and replaced with a custom pipeline:
+
+1. **Cinnamon's built-in brightness handler is disabled:**
+
+```bash
+gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
+gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
+```
+
+2. **`xbindkeys` intercepts `XF86MonBrightnessDown`/`Up`** and routes them to `brightness.sh`:
+
+See [`config/.xbindkeysrc`](config/.xbindkeysrc). Install:
+
+```bash
+sudo apt install xbindkeys
+cp config/.xbindkeysrc ~/.xbindkeysrc
+cp config/xbindkeys.desktop ~/.config/autostart/
+xbindkeys
+```
+
+3. **F7 (brightness toggle) is handled by a Cinnamon custom keybinding:**
+
+```bash
+dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0']"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/command "'/home/shahmir/.local/bin/brightness.sh toggle'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/binding "['F7']"
+```
+
+> **Why two different key interception methods?** Cinnamon custom keybindings work for regular keysyms like `F7` but cannot grab `XF86MonBrightness*` keysyms even when the built-in handler is disabled. `xbindkeys` can grab them because it operates at the X11 level. Conversely, `xbindkeys` was not used for F7 because the Cinnamon keybinding was already working.
+
+#### Solution Part 4: `brightness.sh` Script
+
+A single script ([`scripts/brightness.sh`](scripts/brightness.sh)) handles all brightness operations through Cinnamon's D-Bus interface (`org.cinnamon.SettingsDaemon.Power.Screen`). Using D-Bus instead of writing directly to `/sys/class/backlight/acpi_video0/brightness` keeps Cinnamon's internal brightness state in sync and triggers the proper ACPI methods.
+
+Install:
+
+```bash
+cp scripts/brightness.sh ~/.local/bin/brightness.sh
+chmod +x ~/.local/bin/brightness.sh
+```
+
+**Features:**
+
+- **`brightness.sh up`** — If muted, restores to saved brightness first, then steps up. Shows OSD. No-op at 100%.
+- **`brightness.sh down`** — If muted, restores to saved brightness first, then steps down. Shows OSD. No-op at 0%.
+- **`brightness.sh toggle`** — Saves current brightness and sets to 0% (mute), or restores saved brightness (unmute). Shows OSD.
+- **Concurrency protection** — Uses `flock` to drop duplicate events when keys are held down, preventing lag from queued D-Bus calls.
+- **OSD at bounds** — Always shows the Cinnamon brightness popup, even when already at min/max, so the user gets visual feedback.
+- **Error handling** — Logs to stderr if `csd-power` is unreachable.
 
 #### F-Row Key Map
 
-| Key | Without Fn (media) | With Fn (function) |
-|-----|-------------------|-------------------|
-| F1 | Sleep | F1 |
-| F2 | Airplane mode | F2 |
-| F3 | Keyboard backlight down | F3 |
-| F4 | Keyboard backlight up | F4 |
-| F5 | Display brightness down | F5 |
-| F6 | Display brightness up | F6 |
-| F7 | Screen lock | F7 |
-| F8 | Display switch (firmware-handled, no Fn swap) | F8 |
-| F9 | Touchpad toggle | F9 |
-| F10 | Mute | F10 |
-| F11 | Volume down | F11 |
-| F12 | Volume up | F12 |
+| Key | Without Fn (media) | With Fn (function) | Notes |
+|-----|-------------------|-------------------|-------|
+| F1 | Sleep | F1 | |
+| F2 | Airplane mode | F2 | |
+| F3 | Keyboard backlight down | F3 | |
+| F4 | Keyboard backlight up | F4 | |
+| F5 | Display brightness down | F5 | Routed through `brightness.sh down` via xbindkeys |
+| F6 | Display brightness up | F6 | Routed through `brightness.sh up` via xbindkeys |
+| F7 | Brightness mute/unmute | F7 | Routed through `brightness.sh toggle` via Cinnamon keybinding |
+| F8 | Display switch | F8 | Firmware-handled, no WMI event, no Fn swap |
+| F9 | Touchpad toggle | F9 | |
+| F10 | Mute | F10 | |
+| F11 | Volume down | F11 | |
+| F12 | Volume up | F12 | |
+
+#### Full Installation
+
+All config files and scripts are in this repo under [`config/`](config/) and [`scripts/`](scripts/). To set up from scratch:
+
+```bash
+# 1. Kernel parameter (requires reboot)
+# Add "acpi_osi= " (with trailing space) to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub
+sudo update-grub && sudo reboot
+
+# 2. Install xbindkeys
+sudo apt install xbindkeys
+
+# 3. Copy config files
+cp config/.Xmodmap ~/
+cp config/.xbindkeysrc ~/
+cp config/xmodmap.desktop ~/.config/autostart/
+cp config/xbindkeys.desktop ~/.config/autostart/
+
+# 4. Install brightness script
+cp scripts/brightness.sh ~/.local/bin/
+chmod +x ~/.local/bin/brightness.sh
+
+# 5. Disable Cinnamon's built-in brightness key handler
+gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
+gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
+
+# 6. Add F7 brightness toggle keybinding
+dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0']"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/command "'/home/shahmir/.local/bin/brightness.sh toggle'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/binding "['F7']"
+
+# 7. Apply xmodmap and start xbindkeys
+xmodmap ~/.Xmodmap
+xbindkeys
+```
 
 ### Bluetooth Power Saving
 

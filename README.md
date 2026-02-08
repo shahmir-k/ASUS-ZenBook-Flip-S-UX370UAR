@@ -169,28 +169,140 @@ stress-ng --cpu 0 --cpu-method all --timeout 2m --metrics-brief
 
 > **Note:** -120 mV on core/cache caused a crash on this chip. -100 mV passed stress testing with 0 failures, leaving a 20 mV margin from the instability threshold.
 
-### Fn Key Behavior
+### Fn / Media Key Remapping
 
-By default the F-row sends F1-F12 keycodes and requires holding Fn for media keys (volume, brightness, etc.). To invert this so media keys are the default, the `asus_wmi` kernel module `fnlock_default` parameter is set to `N`.
+#### The Problem
+
+On this laptop, the F-row defaults to F1-F12 and requires holding Fn for media keys (volume, brightness, etc.). The Fn key is handled entirely by the embedded controller (EC) at the firmware level and is invisible to Linux.
+
+Two issues had to be solved:
+
+1. **The EC was swallowing media key events** — when pressing Fn+media keys, the EC handled the action internally (changing brightness/volume at the hardware level) without sending WMI notifications to the OS. The `Asus WMI hotkeys` input device existed but never fired events.
+
+2. **Swapping F-keys and media keys** — making bare keypresses send media functions and Fn+key send F1-F12.
+
+#### What Didn't Work
+
+- **`asus_wmi fnlock_default=N/Y`** — The UX370UAR BIOS (version 300) does not support the `ASUS_WMI_DEVID_FNLOCK` WMI method. The parameter is accepted but the firmware ignores it.
+- **`Fn+Esc` toggle** — Not functional on this model.
+- **`asusctl`** — Designed for 2020+ ROG/TUF laptops, not applicable.
+- **`asus-wmi-dkms` / `acpi4asus-dkms`** — Outdated, no UX370-specific patches.
+- **`xbindkeys`** — Cinnamon's key grabs take priority, preventing xbindkeys from intercepting F-keys.
+- **Cinnamon custom keybindings** — Also failed to intercept bare F-keys.
+
+#### Solution Part 1: `acpi_osi=` Kernel Parameter
+
+The BIOS DSDT contains `_OSI("Windows 2015")` conditional logic. When the kernel reports Windows 10 compatibility, the EC takes the modern code path and handles media keys internally. Setting `acpi_osi=` (empty, with trailing space) disables all `_OSI` responses, forcing the DSDT into the legacy code path where the EC sends WMI notifications to the OS.
 
 ```bash
-# Create dedicated config file
-echo "options asus_wmi fnlock_default=N" | sudo tee /etc/modprobe.d/asus-fnlock.conf
+# In /etc/default/grub (note the trailing space after =):
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi= "
 
-# Update initramfs so it takes effect at boot
-sudo update-initramfs -u -k all
-
+sudo update-grub
 sudo reboot
 ```
 
-Verify after reboot:
+After reboot, verify WMI events are coming through:
 
 ```bash
-cat /sys/module/asus_wmi/parameters/fnlock_default
-# Should output: N
+sudo evtest /dev/input/event11  # Asus WMI hotkeys
+# Press Fn+F12 — should show KEY_VOLUMEUP events
 ```
 
-> **Note:** `Fn+Esc` toggles fnlock on/off per-session. If `fnlock_default=N` gives the wrong behavior on your specific BIOS revision, try `Y` instead — the semantics can be inverted on some ASUS models.
+#### Solution Part 2: Bidirectional `xmodmap` Swap
+
+With WMI events now reaching X11, both the F-key keycodes (from bare keypresses) and the media keycodes (from Fn+keypresses via WMI) are visible. `xmodmap` swaps them at the X11 keycode level:
+
+- Without Fn: F-key keycodes are remapped to media keysyms
+- With Fn: WMI media keycodes are remapped back to F-key keysyms
+
+`~/.Xmodmap`:
+
+```
+! F1 <-> Sleep
+keycode 67 = XF86Sleep F1
+keycode 150 = F1 XF86Sleep
+
+! F2 <-> Airplane/WLAN
+keycode 68 = XF86RFKill F2
+keycode 255 = F2 XF86RFKill
+
+! F3 <-> Keyboard backlight down
+keycode 69 = XF86KbdBrightnessDown F3
+keycode 237 = F3 XF86KbdBrightnessDown
+
+! F4 <-> Keyboard backlight up
+keycode 70 = XF86KbdBrightnessUp F4
+keycode 238 = F4 XF86KbdBrightnessUp
+
+! F5 <-> Brightness down
+keycode 71 = XF86MonBrightnessDown F5
+keycode 232 = F5 XF86MonBrightnessDown
+
+! F6 <-> Brightness up
+keycode 72 = XF86MonBrightnessUp F6
+keycode 233 = F6 XF86MonBrightnessUp
+
+! F7 <-> Display toggle
+keycode 73 = XF86Display F7
+keycode 235 = F7 XF86Display
+
+! F8 <-> Camera
+keycode 74 = XF86WebCam F8
+keycode 220 = F8 XF86WebCam
+
+! F9 <-> Touchpad toggle
+keycode 75 = XF86TouchpadToggle F9
+keycode 199 = F9 XF86TouchpadToggle
+
+! F10 <-> Mute
+keycode 76 = XF86AudioMute F10
+keycode 121 = F10 XF86AudioMute
+
+! F11 <-> Volume down
+keycode 95 = XF86AudioLowerVolume F11
+keycode 122 = F11 XF86AudioLowerVolume
+
+! F12 <-> Volume up
+keycode 96 = XF86AudioRaiseVolume F12
+keycode 123 = F12 XF86AudioRaiseVolume
+```
+
+Apply and persist across logins:
+
+```bash
+xmodmap ~/.Xmodmap
+```
+
+Autostart entry (`~/.config/autostart/xmodmap.desktop`):
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=Xmodmap Media Keys
+Exec=xmodmap /home/shahmir/.Xmodmap
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3
+```
+
+#### F-Row Key Map
+
+| Key | Without Fn (media) | With Fn (function) |
+|-----|-------------------|-------------------|
+| F1 | Sleep | F1 |
+| F2 | Airplane mode | F2 |
+| F3 | Keyboard backlight down | F3 |
+| F4 | Keyboard backlight up | F4 |
+| F5 | Display brightness down | F5 |
+| F6 | Display brightness up | F6 |
+| F7 | Display toggle | F7 |
+| F8 | Camera | F8 |
+| F9 | Touchpad toggle | F9 |
+| F10 | Mute | F10 |
+| F11 | Volume down | F11 |
+| F12 | Volume up | F12 |
 
 ### Bluetooth Power Saving
 

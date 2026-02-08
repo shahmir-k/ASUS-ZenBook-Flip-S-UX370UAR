@@ -137,12 +137,12 @@ make
 sudo make install
 ```
 
-Configure `/etc/intel-undervolt.conf` with safe starting values:
+Configure `/etc/intel-undervolt.conf` with the stable values determined through testing:
 
 ```
-undervolt 0 'CPU' -80
-undervolt 1 'GPU' -50
-undervolt 2 'CPU Cache' -80
+undervolt 0 'CPU' -100
+undervolt 1 'GPU' -80
+undervolt 2 'CPU Cache' -100
 undervolt 3 'System Agent' 0
 undervolt 4 'Analog I/O' 0
 ```
@@ -161,7 +161,13 @@ sudo systemctl enable intel-undervolt.service
 sudo systemctl enable intel-undervolt-loop.service
 ```
 
-> **Note:** Stress test with `mprime` (Small FFTs, then Blend) for 1-2 hours before pushing values further. Most i7-8550U chips are stable at -100 to -120 mV on core/cache. Add a 10 mV safety margin from your last stable value.
+Stability was verified with `stress-ng`:
+
+```bash
+stress-ng --cpu 0 --cpu-method all --timeout 2m --metrics-brief
+```
+
+> **Note:** -120 mV on core/cache caused a crash on this chip. -100 mV passed stress testing with 0 failures, leaving a 20 mV margin from the instability threshold.
 
 ### Bluetooth Power Saving
 

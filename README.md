@@ -176,6 +176,191 @@ rfkill block bluetooth    # Disable when not in use
 rfkill unblock bluetooth  # Re-enable
 ```
 
+## Touchpad
+
+The laptop has an ELAN1200 (04F3:3058) touchpad connected via I2C. There are three X11 input drivers available on Linux. This system uses **Synaptics**.
+
+### Driver Comparison
+
+#### libinput
+
+The modern default driver on most Linux distros. Minimal configuration, works out of the box.
+
+**Pros:**
+- Actively maintained, used by both X11 and Wayland
+- Good multi-touch gesture support
+- Minimal setup required
+- Handles most hardware well with no config
+
+**Cons:**
+- Limited configuration options compared to Synaptics
+- Acceleration curve can feel off on some hardware (ELAN1200 falls back to a generic curve)
+- No per-axis scroll speed control
+- No circular scrolling
+- No pressure-based cursor speed
+
+**Install:**
+```bash
+sudo apt install xserver-xorg-input-libinput
+```
+
+**Configuration** (`/etc/X11/xorg.conf.d/40-libinput.conf`):
+```
+Section "InputClass"
+    Identifier "libinput touchpad"
+    Driver "libinput"
+    MatchIsTouchpad "on"
+    Option "Tapping" "on"                  # Tap to click
+    Option "TappingDrag" "on"              # Tap and drag
+    Option "NaturalScrolling" "true"       # Reverse scroll direction
+    Option "ScrollMethod" "twofinger"      # twofinger | edge | none
+    Option "DisableWhileTyping" "true"     # Palm rejection while typing
+    Option "AccelProfile" "adaptive"       # adaptive | flat
+    Option "AccelSpeed" "0.0"             # -1.0 (slow) to 1.0 (fast)
+    Option "ClickMethod" "buttonareas"     # buttonareas | clickfinger
+EndSection
+```
+
+**Runtime tweaks via xinput:**
+```bash
+# List properties
+xinput list-props "ELAN1200:00 04F3:3058 Touchpad"
+
+# Set acceleration profile (0,1,0 = adaptive; 1,0,0 = flat)
+xinput set-prop <id> "libinput Accel Profile Enabled" 0, 1, 0
+
+# Set acceleration speed (-1.0 to 1.0)
+xinput set-prop <id> "libinput Accel Speed" 0.5
+
+# Set scroll pixel distance (lower = faster scroll)
+xinput set-prop <id> "libinput Scrolling Pixel Distance" 15
+```
+
+---
+
+#### Synaptics (currently active)
+
+The legacy driver with the most configuration options. Better acceleration feel on some hardware.
+
+**Pros:**
+- Fine-grained control over acceleration (MinSpeed, MaxSpeed, AccelFactor)
+- Per-axis scroll distance tuning
+- Pressure-sensitive cursor speed
+- Circular scrolling support
+- Coasting (momentum scrolling) with adjustable friction
+- Edge scrolling zones
+- Better feel than libinput on ELAN touchpads in many cases
+
+**Cons:**
+- No longer actively developed (maintenance mode)
+- X11 only, will not work on Wayland
+- No built-in gesture support (need libinput-gestures or fusuma separately)
+- Can conflict with libinput if both are installed without proper priority config
+
+**Install:**
+```bash
+sudo apt install xserver-xorg-input-synaptics
+```
+
+**Configuration** (`/etc/X11/xorg.conf.d/70-synaptics.conf`):
+```
+Section "InputClass"
+    Identifier "touchpad"
+    Driver "synaptics"
+    MatchIsTouchpad "on"
+    Option "TapButton1" "1"              # 1-finger tap = left click
+    Option "TapButton2" "3"              # 2-finger tap = right click
+    Option "TapButton3" "2"              # 3-finger tap = middle click
+    Option "VertTwoFingerScroll" "on"
+    Option "HorizTwoFingerScroll" "on"
+    Option "NaturalScrolling" "on"       # Reverse scroll direction
+    Option "PalmDetect" "on"
+    Option "PalmMinWidth" "4"            # Min finger width to trigger palm rejection
+    Option "PalmMinZ" "50"               # Min pressure to trigger palm rejection
+    Option "MinSpeed" "1"                # Minimum cursor speed multiplier
+    Option "MaxSpeed" "1.75"             # Maximum cursor speed multiplier
+    Option "AccelFactor" "0.05"          # Acceleration ramp-up rate
+    Option "CoastingSpeed" "20"          # Momentum scroll speed (0 = disabled)
+    Option "CoastingFriction" "50"       # How quickly coasting stops
+EndSection
+```
+
+**Runtime tweaks via synclient:**
+```bash
+# List all options and current values
+synclient -l
+
+# Acceleration
+synclient MinSpeed=1 MaxSpeed=2.0 AccelFactor=0.06
+
+# Scroll speed (negative = natural scrolling, lower abs value = faster)
+synclient VertScrollDelta=-50 HorizScrollDelta=50
+
+# Palm detection sensitivity
+synclient PalmDetect=1 PalmMinWidth=4 PalmMinZ=50
+
+# Tap timing (ms)
+synclient MaxTapTime=180 MaxDoubleTapTime=180
+
+# Coasting (momentum scroll)
+synclient CoastingSpeed=20 CoastingFriction=50
+
+# Disable touchpad
+synclient TouchpadOff=1   # 0=on, 1=off, 2=disable tap/scroll only
+```
+
+---
+
+#### evdev
+
+The generic Linux input driver. No touchpad-specific features.
+
+**Pros:**
+- Works with any input device
+- Extremely simple and predictable
+- Lowest overhead
+
+**Cons:**
+- No tap-to-click
+- No two-finger scrolling
+- No palm detection
+- No acceleration tuning beyond basic X11 pointer settings
+- Not suitable for touchpad use
+
+**Install:**
+```bash
+sudo apt install xserver-xorg-input-evdev
+```
+
+evdev is only useful as a fallback if both libinput and Synaptics fail. Not recommended for touchpad use.
+
+---
+
+### Which Driver to Use
+
+| Use case | Driver |
+|----------|--------|
+| Default / Wayland / minimal config | libinput |
+| Want fine-grained acceleration and scroll tuning on X11 | Synaptics |
+| Planning to switch to Wayland in the future | libinput |
+| Fallback only | evdev |
+
+### Switching Drivers
+
+To switch from Synaptics back to libinput:
+```bash
+sudo rm /etc/X11/xorg.conf.d/70-synaptics.conf
+sudo apt remove xserver-xorg-input-synaptics
+# Log out and back in
+```
+
+To switch from libinput to Synaptics:
+```bash
+sudo apt install xserver-xorg-input-synaptics
+# Create /etc/X11/xorg.conf.d/70-synaptics.conf (see config above)
+# Log out and back in
+```
+
 ## Theming
 
 Desktop ricing is managed in a separate repo: [shahmir-k/linux-mint-ricing](https://github.com/shahmir-k/linux-mint-ricing)

@@ -94,15 +94,21 @@ sudo systemctl enable --now powertop-autotune.service
 
 ### Battery Charge Limit
 
-Set to preserve long-term battery health:
+Set to 85% via TLP to preserve long-term battery health. The charge threshold is exposed by the `asus-nb-wmi` kernel module and TLP writes to it at boot.
 
 ```bash
-# Set charge limit (resets on reboot unless configured in TLP)
-echo 85 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold
+# Uncomment and set in /etc/tlp.conf:
+sudo sed -i 's/^#STOP_CHARGE_THRESH_BAT0=.*/STOP_CHARGE_THRESH_BAT0=85/' /etc/tlp.conf
 
-# Persistent via TLP — add to /etc/tlp.conf:
-# STOP_CHARGE_THRESH_BAT0=85
+# Apply immediately:
+sudo tlp start
+
+# Verify:
+cat /sys/class/power_supply/BAT0/charge_control_end_threshold
+# Should output: 85
 ```
+
+> **Note:** Some ASUS laptops silently ignore thresholds other than 40, 60, or 80. If the battery charges past the set limit, change the value to 80.
 
 ### Bluetooth Power Saving
 

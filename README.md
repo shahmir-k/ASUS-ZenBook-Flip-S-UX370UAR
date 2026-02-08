@@ -2,6 +2,18 @@
 
 My personal device configuration and power optimization setup for Linux Mint on the ASUS ZenBook 13 Flip.
 
+## Device
+
+<p align="center">
+  <img src="images/front.png" width="280" alt="Front view">
+  <img src="images/angle.png" width="280" alt="Angle view">
+  <img src="images/variant.png" width="280" alt="Tent mode">
+</p>
+
+<p align="center">
+  <img src="images/feature.jpg" width="500" alt="Lid closed with stylus">
+</p>
+
 ## Hardware Specs
 
 | Component | Detail |

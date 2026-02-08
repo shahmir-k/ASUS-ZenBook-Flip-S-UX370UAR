@@ -30,8 +30,9 @@ keycode 233 = F6 XF86MonBrightnessUp
 ! Fn+F7 sends KEY_SCREENLOCK via WMI, remapped to F7
 keycode 160 = F7 XF86ScreenSaver
 
-! F8 - Display switch (Fn+F8 is handled by firmware, no WMI event)
+! F8 <-> Display switch (KEY_SWITCHVIDEOMODE via WMI, X11 keycode 235)
 keycode 74 = XF86Display F8
+keycode 235 = F8 XF86Display
 
 ! F9 <-> Touchpad toggle
 keycode 75 = XF86TouchpadToggle F9

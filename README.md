@@ -194,19 +194,27 @@ Two issues had to be solved:
 The solution has four layers:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 1: Kernel — acpi_osi= forces EC to send WMI events  │
-├─────────────────────────────────────────────────────────────┤
-│  Layer 2: xmodmap — bidirectional F-key / media key swap    │
-├─────────────────────────────────────────────────────────────┤
-│  Layer 3: Key interception                                  │
-│    ├── xbindkeys → F5/F6 (brightness up/down)              │
-│    └── Cinnamon custom keybinding → F7 (brightness toggle)  │
-├─────────────────────────────────────────────────────────────┤
-│  Layer 4: brightness.sh — D-Bus control with OSD            │
-│    ├── up/down: mute-aware step with bounds checking        │
-│    └── toggle: mute/unmute (save & restore brightness)      │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  Layer 1: Kernel — acpi_osi= forces EC to send WMI events       │
+├──────────────────────────────────────────────────────────────────┤
+│  Layer 2: xmodmap — bidirectional F-key / media key swap         │
+├──────────────────────────────────────────────────────────────────┤
+│  Layer 3: Key interception                                       │
+│    ├── xbindkeys → F5/F6 (brightness up/down)                   │
+│    └── Cinnamon custom keybindings                               │
+│         ├── F7 → brightness.sh toggle                            │
+│         └── XF86Display → display-control.sh                     │
+├──────────────────────────────────────────────────────────────────┤
+│  Layer 4: Scripts                                                │
+│    ├── brightness.sh — D-Bus brightness control with OSD         │
+│    │    ├── up/down: mute-aware step with bounds checking        │
+│    │    └── toggle: mute/unmute (save & restore brightness)      │
+│    ├── display-control.sh — short/long press dispatcher          │
+│    │    ├── short press (<2s): display-switch.sh                 │
+│    │    └── long press (>2s): GNOME Network Displays (casting)   │
+│    └── display-switch.sh — cycle display modes via xrandr        │
+│         └── internal → mirror → extend → external → internal     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 #### Solution Part 1: `acpi_osi=` Kernel Parameter
@@ -270,16 +278,23 @@ cp config/xbindkeys.desktop ~/.config/autostart/
 xbindkeys
 ```
 
-3. **F7 (brightness toggle) is handled by a Cinnamon custom keybinding:**
+3. **F7 (brightness toggle) and F8 (display switch) are handled by Cinnamon custom keybindings:**
 
 ```bash
-dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0']"
+dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
+
+# F7 — brightness mute/unmute
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/command "'/home/shahmir/.local/bin/brightness.sh toggle'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/binding "['F7']"
+
+# F8 — display switch / wireless casting
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/name "'Display Switch'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/command "'/home/shahmir/.local/bin/display-control.sh'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/binding "['XF86Display']"
 ```
 
-> **Why two different key interception methods?** Cinnamon custom keybindings work for regular keysyms like `F7` but cannot grab `XF86MonBrightness*` keysyms even when the built-in handler is disabled. `xbindkeys` can grab them because it operates at the X11 level. Conversely, `xbindkeys` was not used for F7 because the Cinnamon keybinding was already working.
+> **Why two different key interception methods?** Cinnamon custom keybindings work for regular keysyms like `F7` and `XF86Display` but cannot grab `XF86MonBrightness*` keysyms even when the built-in handler is disabled. `xbindkeys` can grab them because it operates at the X11 level. Conversely, `xbindkeys` was not used for F7/F8 because the Cinnamon keybindings were already working.
 
 #### Solution Part 4: `brightness.sh` Script
 
@@ -301,6 +316,31 @@ chmod +x ~/.local/bin/brightness.sh
 - **OSD at bounds** — Always shows the Cinnamon brightness popup, even when already at min/max, so the user gets visual feedback.
 - **Error handling** — Logs to stderr if `csd-power` is unreachable.
 
+#### Solution Part 5: Display Switch via `display-control.sh` + `display-switch.sh`
+
+F8 (`XF86Display`) is handled by two scripts that provide both wired display switching and wireless casting:
+
+- **[`scripts/display-control.sh`](scripts/display-control.sh)** — Detects press duration using `xinput` to monitor keycode 74 (F8) release:
+  - **Short press (< 2 seconds):** Calls `display-switch.sh` to cycle display modes
+  - **Long press (> 2 seconds):** Opens GNOME Network Displays for Miracast/Wi-Fi casting
+
+- **[`scripts/display-switch.sh`](scripts/display-switch.sh)** — Cycles through four display modes using `xrandr`, similar to Windows Win+P:
+  1. **Internal only** — laptop screen only
+  2. **Mirror** — same image on laptop and external display
+  3. **Extend** — external display to the right of laptop screen
+  4. **External only** — laptop screen off, external display only
+
+  If no external display is connected, shows a notification. State is tracked in `/tmp/.display_mode`.
+
+Install:
+
+```bash
+sudo apt install gnome-network-displays
+cp scripts/display-control.sh ~/.local/bin/
+cp scripts/display-switch.sh ~/.local/bin/
+chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
+```
+
 #### F-Row Key Map
 
 | Key | Without Fn (media) | With Fn (function) | Notes |
@@ -312,7 +352,7 @@ chmod +x ~/.local/bin/brightness.sh
 | F5 | Display brightness down | F5 | Routed through `brightness.sh down` via xbindkeys |
 | F6 | Display brightness up | F6 | Routed through `brightness.sh up` via xbindkeys |
 | F7 | Brightness mute/unmute | F7 | Routed through `brightness.sh toggle` via Cinnamon keybinding |
-| F8 | Display switch | F8 | Firmware-handled, no WMI event, no Fn swap |
+| F8 | Display switch / cast | F8 | Short press: cycle display modes. Long press (>2s): open wireless casting |
 | F9 | Touchpad toggle | F9 | |
 | F10 | Mute | F10 | |
 | F11 | Volume down | F11 | |
@@ -327,8 +367,8 @@ All config files and scripts are in this repo under [`config/`](config/) and [`s
 # Add "acpi_osi= " (with trailing space) to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub
 sudo update-grub && sudo reboot
 
-# 2. Install xbindkeys
-sudo apt install xbindkeys
+# 2. Install dependencies
+sudo apt install xbindkeys gnome-network-displays
 
 # 3. Copy config files
 cp config/.Xmodmap ~/
@@ -336,19 +376,26 @@ cp config/.xbindkeysrc ~/
 cp config/xmodmap.desktop ~/.config/autostart/
 cp config/xbindkeys.desktop ~/.config/autostart/
 
-# 4. Install brightness script
+# 4. Install scripts
 cp scripts/brightness.sh ~/.local/bin/
-chmod +x ~/.local/bin/brightness.sh
+cp scripts/display-control.sh ~/.local/bin/
+cp scripts/display-switch.sh ~/.local/bin/
+chmod +x ~/.local/bin/brightness.sh ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 
 # 5. Disable Cinnamon's built-in brightness key handler
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
 
-# 6. Add F7 brightness toggle keybinding
-dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0']"
+# 6. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
+dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
+
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/command "'/home/shahmir/.local/bin/brightness.sh toggle'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/binding "['F7']"
+
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/name "'Display Switch'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/command "'/home/shahmir/.local/bin/display-control.sh'"
+dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/binding "['XF86Display']"
 
 # 7. Apply xmodmap and start xbindkeys
 xmodmap ~/.Xmodmap

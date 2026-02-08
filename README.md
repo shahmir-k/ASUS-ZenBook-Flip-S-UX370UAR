@@ -117,6 +117,14 @@ rfkill block bluetooth    # Disable when not in use
 rfkill unblock bluetooth  # Re-enable
 ```
 
+## Theming
+
+Desktop ricing is managed in a separate repo: [shahmir-k/linux-mint-ricing](https://github.com/shahmir-k/linux-mint-ricing)
+
+<p align="center">
+  <img src="images/desktop.png" width="700" alt="Desktop screenshot">
+</p>
+
 ## Tools Reference
 
 | Tool | Use |

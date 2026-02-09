@@ -27,6 +27,7 @@ My personal device configuration and power optimization setup for Linux Mint on 
 | **WiFi** | Intel Wireless 8260 |
 | **Bluetooth** | Intel 8260 (via USB) |
 | **Webcam** | IMC Networks USB2.0 VGA UVC WebCam |
+| **Fingerprint** | Goodix GXFP3200 (SPI) — not supported on Linux |
 
 ## Battery
 
@@ -593,6 +594,41 @@ sudo apt install xserver-xorg-input-synaptics
 # Create /etc/X11/xorg.conf.d/70-synaptics.conf (see config above)
 # Log out and back in
 ```
+
+## Fingerprint Sensor
+
+The laptop has a **Goodix GXFP3200** fingerprint sensor connected via SPI (`spi-GXFP3200:00`, ACPI modalias `acpi:GXFP3200:GXFP3200:`). It is detected at the ACPI level but **does not work on Linux** — there is no driver.
+
+### Why It Doesn't Work
+
+The GXFP3200 is a **pure SPI device**. All existing Goodix fingerprint driver work on Linux — upstream [libfprint](https://fprint.freedesktop.org/supported-devices.html), the [goodix-fp-linux-dev](https://github.com/goodix-fp-linux-dev) community fork, and the proprietary `libfprint-2-tod1-goodix` package — targets **USB-connected** Goodix sensors only (vendor `27c6`). No Linux kernel SPI driver exists for this chip, and no firmware blobs are available.
+
+| Aspect | Status |
+|--------|--------|
+| Upstream libfprint | Not supported (USB Goodix only) |
+| [goodix-fp-linux-dev](https://github.com/goodix-fp-linux-dev) fork | Not supported (USB only, GXFP3200 not listed) |
+| Proprietary TOD driver (libfprint-2-tod1-goodix) | Not supported (USB only, specific product IDs) |
+| Linux kernel SPI driver | Does not exist |
+| Firmware for Linux | Not available |
+| Goodix official Linux support | None ([directed to sales contact](https://developers.goodix.com/en/bbs/detail/5a650860c3bd4bc7b1bb23f94d2d1e74)) |
+| Community success reports | None found ([Arch](https://bbs.archlinux.org/viewtopic.php?id=240293), [Manjaro](https://forum.manjaro.org/t/goodix-gfpx3200-fingerprint/89663)) |
+
+### Verification
+
+```bash
+# The sensor is visible on the SPI bus:
+cat /sys/bus/spi/devices/*/modalias
+# acpi:GXFP3200:GXFP3200:
+
+# But fprintd finds no devices:
+fprintd-list $USER
+# No devices available
+```
+
+### Alternatives
+
+- **USB fingerprint reader** — an external reader with a supported chipset (Elan, Synaptics, or USB Goodix `27c6:xxxx`) works with libfprint out of the box
+- **Monitor the community** — the [goodix-fp-linux-dev](https://github.com/goodix-fp-linux-dev) project may eventually add SPI support
 
 ## Theming
 

@@ -800,14 +800,21 @@ gsettings set org.onboard.window.landscape dock-height 300
 gsettings set org.onboard.window.portrait dock-expand true
 gsettings set org.onboard.window.portrait dock-height 400
 
-# Full keyboard layout + Droid theme + touch feedback
+# Full keyboard layout + Modern theme + touch feedback
 gsettings set org.onboard layout '/usr/share/onboard/layouts/Full Keyboard.onboard'
-gsettings set org.onboard theme '/usr/share/onboard/themes/Droid.theme'
+gsettings set org.onboard theme '/usr/share/onboard/themes/Modern.theme'
 gsettings set org.onboard.keyboard touch-feedback-size 60
+```
+
+A custom **Modern** theme is included in this repo (`config/Modern.theme` + `config/Modern.colors`) — flat white keys on light grey background, styled after Gboard / Windows 10 touch keyboard. Install:
+
+```bash
+sudo cp config/Modern.theme config/Modern.colors /usr/share/onboard/themes/
 ```
 
 Other tips:
 - Auto-show: Onboard Preferences > General > "Auto-show when editing text" (unreliable on Cinnamon, works better on GNOME)
+- No Linux on-screen keyboard supports swipe/gesture typing on X11 — Onboard with word prediction is the best available option
 
 ### Lock Screen
 

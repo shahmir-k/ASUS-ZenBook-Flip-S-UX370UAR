@@ -253,18 +253,24 @@ sudo apt install gnome-shell gnome-session
 
 ---
 
-## Implementation Order
+## Implementation Status
 
-| Priority | Task | Complexity | Dependencies |
-|----------|------|-----------|--------------|
-| 1 | Touch gestures (Touchegg) | Low | `sudo apt install touchegg touche` |
-| 2 | On-screen keyboard (Onboard) | Low | `sudo apt install onboard` |
-| 3 | Stylus apps (Xournal++) | Low | `sudo apt install xournalpp` |
-| 4 | Auto-rotation script | Medium | `iio-sensor-proxy` (installed), script |
-| 5 | Tablet mode detection | Medium-High | Test hinge sensor, write daemon |
-| 6 | Lock screen fix | Medium | LightDM greeter config |
-| 7 | UI scaling toggle | Low | gsettings commands in tablet mode script |
-| 8 | GNOME (optional) | Low | `sudo apt install gnome-shell` |
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 1 | Touch gestures (Touchegg) | Done | `touchegg.conf` configured, systemd service enabled |
+| 2 | On-screen keyboard (Onboard) | Done | Docked, full-width, custom Modern theme, touch feedback |
+| 3 | Stylus apps (Xournal++, Krita) | Done | Both installed |
+| 4 | Auto-rotation script | Done | `auto-rotate.sh` daemon via autostart |
+| 5 | Tablet mode detection | Done | `tablet-mode.sh` daemon using hinge angle sensor (Approach A) |
+| 6 | Lock screen fix | Done | `dm-tool lock` + Onboard in LightDM greeter |
+| 7 | UI scaling toggle | Done | Built into `tablet-mode.sh` (1.3x text, 56px panel) |
+| 8 | GNOME (optional) | Not installed | Documented as alternative, user chose to stay on Cinnamon |
+
+### Known Limitations
+- **No swipe typing** — no Linux on-screen keyboard supports swipe/gesture typing on X11
+- **Touch scrolling in terminal** — VTE (gnome-terminal) doesn't translate touch events to scroll on Xorg; works on Wayland
+- **Onboard auto-show** — unreliable on Cinnamon (works better on GNOME)
+- **Stylus on lock screen** — cinnamon-screensaver excludes XI2 tablet input; workaround is `dm-tool lock`
 
 ---
 

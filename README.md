@@ -23,7 +23,11 @@ My personal device configuration and power optimization setup for Linux Mint on 
 | **GPU** | Intel UHD Graphics 620 (integrated only) |
 | **RAM** | 16 GB |
 | **Storage** | SanDisk SD8SN8U512G1002 512GB SSD |
-| **Display** | 13.3" 1920x1080 touchscreen (convertible) |
+| **Display** | 13.3" 1920x1080 touchscreen (convertible, 360° hinge) |
+| **Touchscreen** | ELAN24CC (04F3:24CC) via I2C — touch + MPP stylus |
+| **Stylus** | Microsoft Pen Protocol (MPP 1.0) — ASUS Pen SA200H compatible |
+| **Accelerometer** | HID-SENSOR-200073 (accel_3d) via Intel Sensor Hub — for auto-rotation |
+| **Hinge Sensor** | HID-SENSOR-INT-020b — reports lid angle for tablet mode detection |
 | **WiFi** | Intel Wireless 8260 |
 | **Bluetooth** | Intel 8260 (via USB) |
 | **Webcam** | IMC Networks USB2.0 VGA UVC WebCam |

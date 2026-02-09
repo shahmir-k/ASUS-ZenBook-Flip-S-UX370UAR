@@ -407,6 +407,39 @@ xmodmap ~/.Xmodmap
 xbindkeys
 ```
 
+### Sleep / Suspend Fix
+
+By default, this laptop uses **s2idle** (S0ix / "Modern Standby") instead of **S3 deep sleep** when the lid is closed. s2idle is a software-based idle state where the CPU stays partially powered — on Kaby Lake, the platform often fails to reach the low-power S0ix substates, so the laptop essentially stays awake with the screen off and drains the battery overnight.
+
+S3 deep sleep is available but not selected by default:
+
+```bash
+cat /sys/power/mem_sleep
+# s2idle [deep]     ← s2idle is active, deep is available but not used
+```
+
+The fix is the `mem_sleep_default=deep` kernel parameter, which forces S3 suspend-to-RAM:
+
+```bash
+# In /etc/default/grub:
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep"
+
+sudo update-grub
+sudo reboot
+```
+
+After reboot, verify:
+
+```bash
+cat /sys/power/mem_sleep
+# s2idle [deep]     ← deep is now selected
+```
+
+| Sleep Mode | Power Draw | Mechanism |
+|-----------|-----------|-----------|
+| **s2idle** (default) | High — drains battery | Software idle, CPU partially on |
+| **deep** (S3, fixed) | Very low — days of standby | Hardware suspend, CPU powered off |
+
 ### Bluetooth Power Saving
 
 ```bash
@@ -754,8 +787,26 @@ dbus-send --type=method_call --dest=org.onboard.Onboard \
     /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.ToggleVisible
 ```
 
-**Configuration tips:**
-- Layout: "Full Keyboard" or "Phone" for touch-friendly sizing
+**Configuration** — make Onboard touch-friendly (docked, full-width, larger keys):
+
+```bash
+# Dock to bottom, full width, taller
+gsettings set org.onboard.window docking-enabled true
+gsettings set org.onboard.window docking-edge 'bottom'
+gsettings set org.onboard.window docking-shrink-workarea true
+gsettings set org.onboard.window force-to-top true
+gsettings set org.onboard.window.landscape dock-expand true
+gsettings set org.onboard.window.landscape dock-height 300
+gsettings set org.onboard.window.portrait dock-expand true
+gsettings set org.onboard.window.portrait dock-height 400
+
+# Full keyboard layout + Droid theme + touch feedback
+gsettings set org.onboard layout '/usr/share/onboard/layouts/Full Keyboard.onboard'
+gsettings set org.onboard theme '/usr/share/onboard/themes/Droid.theme'
+gsettings set org.onboard.keyboard touch-feedback-size 60
+```
+
+Other tips:
 - Auto-show: Onboard Preferences > General > "Auto-show when editing text" (unreliable on Cinnamon, works better on GNOME)
 
 ### Lock Screen

@@ -3,13 +3,22 @@
 # Short press (<2s): cycle display modes (internal → mirror → extend → external)
 # Long press (>2s): open wireless display casting (GNOME Network Displays)
 
-KEYBOARD=$(xinput list | grep -i "AT Translated" | grep -oP 'id=\K\d+')
+LOCK_FILE="/tmp/.display-control.lock"
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
 
-# Monitor for keycode 74 (F8) release, timeout after 2 seconds
-if timeout 2 bash -c "xinput test $KEYBOARD 2>/dev/null | grep -m1 'key release  74'" > /dev/null 2>&1; then
-    # Released within 2 seconds — short press → cycle display mode
-    /home/shahmir/.local/bin/display-switch.sh
-else
-    # Held for 2+ seconds — long press → open casting menu
-    gnome-network-displays &
-fi
+KEYBOARD=$(xinput list | grep -i "AT Translated" | grep -oP 'id=\K\d+')
+start=$(date +%s)
+
+# Poll keyboard state every 100ms — check if keycode 74 (F8) is still held
+while xinput query-state "$KEYBOARD" 2>/dev/null | grep -q "key\[74\]=down"; do
+    now=$(date +%s)
+    if [ $((now - start)) -ge 2 ]; then
+        gnome-network-displays &
+        exit 0
+    fi
+    sleep 0.1
+done
+
+# Key was released before 2 seconds — short press
+/home/shahmir/.local/bin/display-switch.sh

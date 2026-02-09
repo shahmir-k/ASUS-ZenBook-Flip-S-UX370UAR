@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Tablet Mode Daemon
+Comment=Monitor hinge angle and toggle tablet mode
+Exec=/home/shahmir/.local/bin/tablet-mode.sh daemon
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5

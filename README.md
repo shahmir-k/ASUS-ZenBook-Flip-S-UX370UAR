@@ -634,6 +634,201 @@ fprintd-list $USER
 - **USB fingerprint reader** — an external reader with a supported chipset (Elan, Synaptics, or USB Goodix `27c6:xxxx`) works with libfprint out of the box
 - **Monitor the community** — the [goodix-fp-linux-dev](https://github.com/goodix-fp-linux-dev) project may eventually add SPI support
 
+## 2-in-1 Tablet Mode
+
+The ZenBook Flip S is a 360° convertible with an accelerometer, hinge angle sensor, and touchscreen with stylus support. This section covers the full tablet experience on Cinnamon/Xorg.
+
+### Touch Gestures (Touchegg)
+
+[Touchegg](https://github.com/JoseExposito/touchegg) is the only gesture tool that supports both touchpad and touchscreen input. Cinnamon 5.8+ integrates with it natively.
+
+```bash
+sudo apt install touchegg
+sudo systemctl enable --now touchegg
+```
+
+Configuration ([`config/touchegg.conf`](config/touchegg.conf)):
+
+| Gesture | Fingers | Direction | Action |
+|---------|---------|-----------|--------|
+| Swipe | 2 | Left | Alt+Right (forward) |
+| Swipe | 2 | Right | Alt+Left (back) |
+| Swipe | 3 | Up | Super+S (Expo overview) |
+| Swipe | 3 | Down | Super+D (Show desktop) |
+| Pinch | 2 | In | Ctrl+Minus (zoom out) |
+| Pinch | 2 | Out | Ctrl+Plus (zoom in) |
+| Swipe | 4 | Left | Next workspace |
+| Swipe | 4 | Right | Previous workspace |
+
+Install:
+
+```bash
+mkdir -p ~/.config/touchegg
+cp config/touchegg.conf ~/.config/touchegg/touchegg.conf
+sudo systemctl restart touchegg
+```
+
+### Auto-Rotation
+
+The accelerometer (`HID-SENSOR-200073`, `iio:device1`) is exposed by `iio-sensor-proxy` as orientation events. The [`scripts/auto-rotate.sh`](scripts/auto-rotate.sh) script monitors these events and:
+
+1. Rotates the display via `xrandr --output eDP-1 --rotate <direction>`
+2. Remaps touchscreen and stylus input coordinates via `xinput` coordinate transformation matrices to keep touch aligned with the rotated display
+
+| Orientation | xrandr | Coordinate Transformation Matrix |
+|------------|--------|----------------------------------|
+| normal | `normal` | `1 0 0 0 1 0 0 0 1` |
+| bottom-up | `inverted` | `-1 0 1 0 -1 1 0 0 1` |
+| right-up | `right` | `0 1 0 -1 0 1 0 0 1` |
+| left-up | `left` | `0 -1 1 1 0 0 0 0 1` |
+
+Install:
+
+```bash
+sudo apt install iio-sensor-proxy  # likely already installed
+cp scripts/auto-rotate.sh ~/.local/bin/
+chmod +x ~/.local/bin/auto-rotate.sh
+cp config/auto-rotate.desktop ~/.config/autostart/
+```
+
+Verify the sensor works:
+
+```bash
+monitor-sensor
+# Rotate device — should show: normal, left-up, right-up, bottom-up
+```
+
+### Tablet Mode Detection
+
+The hinge angle sensor (`HID-SENSOR-INT-020b`, `iio:device0`) reports the lid angle in degrees via sysfs. The [`scripts/tablet-mode.sh`](scripts/tablet-mode.sh) daemon polls this value every second and toggles tablet mode based on the angle:
+
+- **Enter tablet mode** (angle > 190°): disables keyboard and touchpad, launches Onboard on-screen keyboard, increases UI scaling
+- **Exit tablet mode** (angle < 170°): re-enables keyboard and touchpad, hides Onboard, restores UI scaling
+- **Hysteresis** (20° gap between thresholds): prevents rapid toggling near the threshold
+
+```bash
+# Read the hinge angle:
+cat /sys/bus/iio/devices/iio:device0/in_angl0_raw
+# Example output: 113 (degrees, normal laptop use)
+
+# Check current state:
+tablet-mode.sh status
+# laptop (hinge: 113°)
+```
+
+The script has three modes:
+
+| Mode | Usage | Description |
+|------|-------|-------------|
+| `daemon` | `tablet-mode.sh` or `tablet-mode.sh daemon` | Background daemon that monitors hinge angle |
+| `toggle` | `tablet-mode.sh toggle` | Manual toggle (useful as keyboard shortcut) |
+| `status` | `tablet-mode.sh status` | Print current state and hinge angle |
+
+When entering tablet mode, the script:
+1. Disables `AT Translated Set 2 keyboard` via `xinput`
+2. Disables `ELAN1200:00 04F3:3058 Touchpad` via `xinput`
+3. Launches Onboard on-screen keyboard (if not already running)
+4. Sets text scaling to 1.3x and panel height to 56px for touch-friendly UI
+
+Install:
+
+```bash
+sudo apt install onboard
+cp scripts/tablet-mode.sh ~/.local/bin/
+chmod +x ~/.local/bin/tablet-mode.sh
+cp config/tablet-mode.desktop ~/.config/autostart/
+```
+
+### On-Screen Keyboard (Onboard)
+
+[Onboard](https://launchpad.net/onboard) is the best on-screen keyboard for Cinnamon on Xorg. Wayland-only alternatives (squeekboard, maliit) don't work.
+
+```bash
+sudo apt install onboard
+```
+
+Onboard is auto-launched by the tablet mode daemon when the laptop is flipped past 180°. It can also be toggled via D-Bus:
+
+```bash
+dbus-send --type=method_call --dest=org.onboard.Onboard \
+    /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.ToggleVisible
+```
+
+**Configuration tips:**
+- Layout: "Full Keyboard" or "Phone" for touch-friendly sizing
+- Auto-show: Onboard Preferences > General > "Auto-show when editing text" (unreliable on Cinnamon, works better on GNOME)
+
+### Lock Screen
+
+The default `cinnamon-screensaver` lock screen does not support stylus input (XI2 tablet devices are excluded from the input grab) and has no on-screen keyboard. Finger touch works.
+
+**Solution:** Use `dm-tool lock` which switches to the LightDM greeter. The greeter accepts all input types and has Onboard configured.
+
+```bash
+# Lock with full input support:
+dm-tool lock
+
+# Or use the script:
+~/.local/bin/lock-screen.sh
+```
+
+The LightDM greeter already has Onboard configured (`keyboard=onboard` in `/etc/lightdm/lightdm-gtk-greeter.conf.d/99_linuxmint.conf`). The accessibility keyboard button on the greeter toggles it.
+
+To make Ctrl+Alt+L use `dm-tool lock` instead of cinnamon-screensaver, you can override the lock keybinding in Cinnamon custom keybindings.
+
+### Stylus / Pen
+
+The ELAN24CC touchscreen supports Microsoft Pen Protocol (MPP 1.0) via the `hid-multitouch` kernel driver. The stylus provides:
+
+- **Pressure:** 256 levels (ABS_PRESSURE, 0-256)
+- **Buttons:** Pen tip (BTN_TOUCH), barrel button (BTN_STYLUS), eraser (BTN_TOOL_RUBBER)
+- **Palm rejection:** The ELAN digitizer suppresses touch input when the pen is in proximity
+
+**Recommended apps:**
+
+| App | Package | Best For |
+|-----|---------|----------|
+| **Xournal++** | `xournalpp` | Note-taking, PDF annotation |
+| **Krita** | `krita` | Drawing, digital art |
+
+```bash
+sudo apt install xournalpp krita
+```
+
+**Xournal++ pen setup:**
+1. Edit > Preferences > Input System: ensure pen device is set to "Pen"
+2. Touchscreen tab: enable "Disable touchscreen for drawing" and "Disable touch drawing while pen is in proximity"
+
+### All 2-in-1 Packages
+
+```bash
+sudo apt install touchegg onboard xournalpp krita iio-sensor-proxy
+```
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Sensors                                                         │
+│    ├── Accelerometer (iio:device1) → iio-sensor-proxy            │
+│    │    └── monitor-sensor → auto-rotate.sh                      │
+│    └── Hinge angle (iio:device0) → sysfs in_angl0_raw           │
+│         └── tablet-mode.sh daemon (polls every 1s)               │
+├──────────────────────────────────────────────────────────────────┤
+│  Auto-Rotation (auto-rotate.sh)                                  │
+│    ├── xrandr --rotate (display)                                 │
+│    └── xinput CTM (touchscreen + stylus alignment)               │
+├──────────────────────────────────────────────────────────────────┤
+│  Tablet Mode (tablet-mode.sh)                                    │
+│    ├── xinput disable/enable (keyboard + touchpad)               │
+│    ├── Onboard on-screen keyboard (launch/hide)                  │
+│    └── gsettings (text scaling + panel height)                   │
+├──────────────────────────────────────────────────────────────────┤
+│  Touch Gestures (Touchegg)                                       │
+│    └── touchegg.conf (swipe, pinch, tap → key combos)            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
 ## Theming
 
 Desktop ricing is managed in a separate repo: [shahmir-k/linux-mint-ricing](https://github.com/shahmir-k/linux-mint-ricing)

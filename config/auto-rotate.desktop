@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Auto Rotate
+Comment=Auto-rotate display based on accelerometer
+Exec=/home/shahmir/.local/bin/auto-rotate.sh
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5

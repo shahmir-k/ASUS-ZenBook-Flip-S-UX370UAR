@@ -363,7 +363,24 @@ chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 | F11 | Volume down | F11 | |
 | F12 | Volume up | F12 | |
 
-> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a separate input device from the keyboard. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same evdev keycodes as the Fn+F11/Fn+F12 WMI events, which means xmodmap would remap them to F11/F12. This is fixed with a udev hwdb rule (`/etc/udev/hwdb.d/90-gpio-volume.hwdb`) that remaps gpio-keys to unique keycodes (`KEY_F17`/`KEY_F18`) at the evdev level before X11 sees them. Xmodmap then maps these unique keycodes to `XF86AudioLowerVolume`/`XF86AudioRaiseVolume`. Requires reboot after install.
+> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a completely separate evdev device from the keyboard. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same evdev keycodes as the Fn+F11/Fn+F12 WMI events, which xmodmap remaps to F11/F12. Since xmodmap is a global X11 keymap and cannot differentiate devices, the fix is **input-remapper**: it grabs the `gpio-keys` device at the evdev level and injects `XF86AudioLowerVolume`/`XF86AudioRaiseVolume` via a virtual uinput device, completely bypassing xmodmap.
+
+**Setup:**
+```bash
+sudo apt install input-remapper
+
+# Create preset directory
+mkdir -p ~/.config/input-remapper-2/presets/gpio-keys
+
+# Copy preset and config from this repo
+cp config/input-remapper-gpio-keys.json ~/.config/input-remapper-2/presets/gpio-keys/volume.json
+cp config/input-remapper-config.json ~/.config/input-remapper-2/config.json
+
+# Apply immediately (also auto-applies on every login via the service)
+sudo input-remapper-control --command start --device "gpio-keys" --preset "volume"
+```
+
+The `input-remapper-daemon` service is enabled at boot and auto-loads the preset via `config.json`.
 
 #### Full Installation
 

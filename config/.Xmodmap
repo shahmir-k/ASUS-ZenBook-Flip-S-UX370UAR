@@ -50,7 +50,6 @@ keycode 122 = F11 XF86AudioLowerVolume
 keycode 96 = XF86AudioRaiseVolume F12
 keycode 123 = F12 XF86AudioRaiseVolume
 
-! Side volume buttons (gpio-keys, remapped via hwdb to KEY_F17/KEY_F18)
-! X11 keycodes: KEY_F17 (187) = 195, KEY_F18 (188) = 196
-keycode 195 = XF86AudioLowerVolume
-keycode 196 = XF86AudioRaiseVolume
+! Side volume buttons (gpio-keys) are handled by input-remapper, which
+! intercepts the gpio-keys device and injects XF86AudioLowerVolume/Up
+! via a virtual uinput device, bypassing xmodmap entirely.

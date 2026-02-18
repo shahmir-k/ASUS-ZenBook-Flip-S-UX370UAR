@@ -360,10 +360,20 @@ chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 | F8 | Display switch / cast | F8 | Short press: cycle display modes. Long press (>2s): open wireless casting |
 | F9 | Touchpad toggle | F9 | |
 | F10 | Mute | F10 | |
-| F11 | Volume down | Volume down | WMI keycode 122 not remapped — shared with side volume rocker |
-| F12 | Volume up | Volume up | WMI keycode 123 not remapped — shared with side volume rocker |
+| F11 | Volume down | F11 | |
+| F12 | Volume up | F12 | |
 
-> **Side volume buttons:** The physical volume rocker on the side of the laptop (`gpio-keys`, `/dev/input/event12`) sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115), which X11 maps to keycodes 122 and 123 — the same keycodes as the Fn+F11/Fn+F12 WMI events. XKB already maps keycodes 122/123 to `XF86AudioLowerVolume`/`XF86AudioRaiseVolume` by default, so these are intentionally **not remapped** in `.Xmodmap`. The trade-off is that Fn+F11/Fn+F12 send volume instead of F11/F12 keysyms — which is correct behaviour since they are volume keys.
+> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a separate evdev device. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same X11 keycodes (122/123) as the Fn+F11/Fn+F12 WMI events, which xmodmap remaps to F11/F12. Since xmodmap is global and can't differentiate devices, **input-remapper** is used to grab gpio-keys at the evdev level and inject `XF86AudioLowerVolume`/`XF86AudioRaiseVolume` via a virtual uinput device before X11 sees them.
+>
+> **Setup:**
+> ```bash
+> sudo apt install input-remapper
+> mkdir -p ~/.config/input-remapper-2/presets/gpio-keys
+> cp config/input-remapper-gpio-keys.json ~/.config/input-remapper-2/presets/gpio-keys/volume.json
+> cp config/input-remapper-config.json ~/.config/input-remapper-2/config.json
+> sudo input-remapper-control --command start --device "gpio-keys" --preset "volume"
+> ```
+> The `input-remapper-daemon` service auto-loads the preset on login.
 
 #### Full Installation
 

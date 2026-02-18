@@ -37,10 +37,10 @@ def main():
     for event in gpio.read_loop():
         if event.type == ecodes.EV_KEY:
             if event.code == ecodes.KEY_VOLUMEDOWN:
-                ui.write(ecodes.EV_KEY, ecodes.KEY_F11, event.value)
+                ui.write(ecodes.EV_KEY, ecodes.KEY_F12, event.value)
                 ui.syn()
             elif event.code == ecodes.KEY_VOLUMEUP:
-                ui.write(ecodes.EV_KEY, ecodes.KEY_F12, event.value)
+                ui.write(ecodes.EV_KEY, ecodes.KEY_F11, event.value)
                 ui.syn()
 
 if __name__ == '__main__':

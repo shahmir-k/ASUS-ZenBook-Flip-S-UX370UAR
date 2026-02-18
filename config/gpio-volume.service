@@ -1,0 +1,12 @@
+[Unit]
+Description=GPIO volume button mapper (ASUS ZenBook Flip S)
+After=systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gpio-volume.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

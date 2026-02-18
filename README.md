@@ -360,8 +360,10 @@ chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 | F8 | Display switch / cast | F8 | Short press: cycle display modes. Long press (>2s): open wireless casting |
 | F9 | Touchpad toggle | F9 | |
 | F10 | Mute | F10 | |
-| F11 | Volume down | F11 | |
-| F12 | Volume up | F12 | |
+| F11 | Volume down | Volume down | Fn+F11 WMI keycode (122) not remapped — shared with side volume button |
+| F12 | Volume up | Volume up | Fn+F12 WMI keycode (123) not remapped — shared with side volume button |
+
+> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (event12), which sends the same X11 keycodes (122/123) as the Fn+F11/Fn+F12 WMI events. These keycodes are intentionally NOT remapped by xmodmap so the side buttons work as volume controls. The trade-off is that Fn+F11/Fn+F12 also send volume instead of F11/F12.
 
 #### Full Installation
 

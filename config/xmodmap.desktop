@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Xmodmap Media Keys
-Exec=xmodmap /home/shahmir/.Xmodmap
+Exec=/home/shahmir/.local/bin/apply-xmodmap.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true

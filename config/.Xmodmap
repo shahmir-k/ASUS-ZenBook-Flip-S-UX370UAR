@@ -42,14 +42,13 @@ keycode 199 = F9 XF86TouchpadToggle
 keycode 76 = XF86AudioMute F10
 keycode 121 = F10 XF86AudioMute
 
-! F11 <-> Volume down
+! F11 -> Volume down
 keycode 95 = XF86AudioLowerVolume F11
-keycode 122 = F11 XF86AudioLowerVolume
 
-! F12 <-> Volume up
+! F12 -> Volume up
 keycode 96 = XF86AudioRaiseVolume F12
-keycode 123 = F12 XF86AudioRaiseVolume
 
-! Side volume buttons (gpio-keys) are handled by input-remapper, which
-! intercepts the gpio-keys device and injects XF86AudioLowerVolume/Up
-! via a virtual uinput device, bypassing xmodmap entirely.
+! keycodes 122/123 are NOT remapped.
+! They are used by both the WMI Fn+F11/Fn+F12 events and the gpio-keys
+! side volume rocker. XKB already maps them to XF86AudioLowerVolume/Up
+! by default, so they work correctly without any remapping.

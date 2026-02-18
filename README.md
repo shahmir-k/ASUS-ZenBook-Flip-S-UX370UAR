@@ -360,10 +360,10 @@ chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 | F8 | Display switch / cast | F8 | Short press: cycle display modes. Long press (>2s): open wireless casting |
 | F9 | Touchpad toggle | F9 | |
 | F10 | Mute | F10 | |
-| F11 | Volume down | Volume down | Fn+F11 WMI keycode (122) not remapped — shared with side volume button |
-| F12 | Volume up | Volume up | Fn+F12 WMI keycode (123) not remapped — shared with side volume button |
+| F11 | Volume down | F11 | |
+| F12 | Volume up | F12 | |
 
-> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (event12), which sends the same X11 keycodes (122/123) as the Fn+F11/Fn+F12 WMI events. These keycodes are intentionally NOT remapped by xmodmap so the side buttons work as volume controls. The trade-off is that Fn+F11/Fn+F12 also send volume instead of F11/F12.
+> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a separate input device from the keyboard. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same evdev keycodes as the Fn+F11/Fn+F12 WMI events, which means xmodmap would remap them to F11/F12. This is fixed with a udev hwdb rule (`/etc/udev/hwdb.d/90-gpio-volume.hwdb`) that remaps gpio-keys to unique keycodes (`KEY_F17`/`KEY_F18`) at the evdev level before X11 sees them. Xmodmap then maps these unique keycodes to `XF86AudioLowerVolume`/`XF86AudioRaiseVolume`. Requires reboot after install.
 
 #### Full Installation
 

@@ -1,0 +1,11 @@
+# Remap gpio-keys side volume buttons to unique keycodes (KEY_F17/KEY_F18)
+# so they don't collide with the WMI volume keycodes (122/123) that xmodmap
+# remaps to F11/F12.
+#
+# gpio-keys: bus 0x19, vendor 0x0001, product 0x0001
+# KEY_VOLUMEDOWN (114 = 0x72) → KEY_F17 (187)
+# KEY_VOLUMEUP   (115 = 0x73) → KEY_F18 (188)
+
+evdev:input:b0019v0001p0001*
+ KEYBOARD_KEY_72=f17
+ KEYBOARD_KEY_73=f18

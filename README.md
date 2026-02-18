@@ -440,6 +440,25 @@ cat /sys/power/mem_sleep
 | **s2idle** (default) | High — drains battery | Software idle, CPU partially on |
 | **deep** (S3, fixed) | Very low — days of standby | Hardware suspend, CPU powered off |
 
+#### Cinnamon Lid Close Suspend Fix
+
+Even with S3 deep sleep configured, Cinnamon's `csd-power` may block suspend on lid close if it thinks an external monitor is attached (it takes a `handle-lid-switch` inhibitor with reason "Multiple displays attached"). This can happen if `xrandr` was used to configure external displays during the session.
+
+Fix: tell Cinnamon to always suspend on lid close regardless of external monitors:
+
+```bash
+gsettings set org.cinnamon.settings-daemon.plugins.power lid-close-suspend-with-external-monitor true
+```
+
+Verify lid close actions are set to suspend:
+
+```bash
+gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-ac-action
+# 'suspend'
+gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-battery-action
+# 'suspend'
+```
+
 ### Bluetooth Power Saving
 
 ```bash

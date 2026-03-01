@@ -255,9 +255,11 @@ cp config/.Xmodmap ~/.Xmodmap
 xmodmap ~/.Xmodmap
 ```
 
-Autostart entry (`~/.config/autostart/xmodmap.desktop`) to persist across logins:
+Autostart entry (`~/.config/autostart/xmodmap.desktop`) uses [`apply-xmodmap.sh`](config/apply-xmodmap.sh) which waits for the `volume-buttons` virtual device (created by `gpio-volume.service`) to appear before applying xmodmap — because X11 resets xmodmap whenever a new keyboard device is detected:
 
 ```bash
+cp config/apply-xmodmap.sh ~/.local/bin/
+chmod +x ~/.local/bin/apply-xmodmap.sh
 cp config/xmodmap.desktop ~/.config/autostart/
 ```
 
@@ -363,17 +365,18 @@ chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 | F11 | Volume down | F11 | |
 | F12 | Volume up | F12 | |
 
-> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a separate evdev device. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same X11 keycodes (122/123) as the Fn+F11/Fn+F12 WMI events, which xmodmap remaps to F11/F12. Since xmodmap is global and can't differentiate devices, **input-remapper** is used to grab gpio-keys at the evdev level and inject `XF86AudioLowerVolume`/`XF86AudioRaiseVolume` via a virtual uinput device before X11 sees them.
+> **Side volume buttons:** The physical volume rocker on the side of the laptop uses `gpio-keys` (`/dev/input/event12`), a separate evdev device. It sends `KEY_VOLUMEDOWN` (114) and `KEY_VOLUMEUP` (115) — the same X11 keycodes (122/123) as the Fn+F11/Fn+F12 WMI events, which xmodmap remaps to F11/F12. Since xmodmap is global and can't differentiate devices, a custom **gpio-volume.py** daemon ([`config/gpio-volume.py`](config/gpio-volume.py)) grabs gpio-keys at the evdev level and re-emits them as `KEY_F11`/`KEY_F12` via a virtual uinput device called `volume-buttons`. xmodmap then maps keycode 95 (`KEY_F11`) → `XF86AudioLowerVolume` and keycode 96 (`KEY_F12`) → `XF86AudioRaiseVolume`, so the side buttons control volume without conflicting with Fn+F11/F12.
 >
 > **Setup:**
 > ```bash
-> sudo apt install input-remapper
-> mkdir -p ~/.config/input-remapper-2/presets/gpio-keys
-> cp config/input-remapper-gpio-keys.json ~/.config/input-remapper-2/presets/gpio-keys/volume.json
-> cp config/input-remapper-config.json ~/.config/input-remapper-2/config.json
-> sudo input-remapper-control --command start --device "gpio-keys" --preset "volume"
+> sudo cp config/gpio-volume.py /usr/local/bin/
+> sudo chmod +x /usr/local/bin/gpio-volume.py
+> sudo cp config/gpio-volume.service /etc/systemd/system/
+> sudo systemctl daemon-reload
+> sudo systemctl enable --now gpio-volume
 > ```
-> The `input-remapper-daemon` service auto-loads the preset on login.
+>
+> **Why not input-remapper?** input-remapper resolves `XF86AudioLowerVolume` to an evdev code at injection start (before xmodmap is applied), so after xmodmap runs, the injected events go through xmodmap and produce F11 instead of volume. The gpio-volume.py approach avoids this by emitting a different evdev code that xmodmap maps to the correct keysym.
 
 #### Full Installation
 
@@ -385,11 +388,13 @@ All config files and scripts are in this repo under [`config/`](config/) and [`s
 sudo update-grub && sudo reboot
 
 # 2. Install dependencies
-sudo apt install xbindkeys gnome-network-displays
+sudo apt install xbindkeys gnome-network-displays python3-evdev
 
 # 3. Copy config files
 cp config/.Xmodmap ~/
 cp config/.xbindkeysrc ~/
+cp config/apply-xmodmap.sh ~/.local/bin/
+chmod +x ~/.local/bin/apply-xmodmap.sh
 cp config/xmodmap.desktop ~/.config/autostart/
 cp config/xbindkeys.desktop ~/.config/autostart/
 
@@ -399,11 +404,22 @@ cp scripts/display-control.sh ~/.local/bin/
 cp scripts/display-switch.sh ~/.local/bin/
 chmod +x ~/.local/bin/brightness.sh ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 
-# 5. Disable Cinnamon's built-in brightness key handler
+# 5. Side volume buttons — gpio-volume service
+sudo cp config/gpio-volume.py /usr/local/bin/
+sudo chmod +x /usr/local/bin/gpio-volume.py
+sudo cp config/gpio-volume.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gpio-volume
+
+# 6. Suspend/resume hook — restart xbindkeys after waking
+sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/
+sudo chmod +x /usr/lib/systemd/system-sleep/99-xbindkeys.sh
+
+# 7. Disable Cinnamon's built-in brightness key handler
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
 
-# 6. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
+# 8. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
 dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
 
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
@@ -414,7 +430,7 @@ dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/name "'
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/command "'/home/shahmir/.local/bin/display-control.sh'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/binding "['XF86Display']"
 
-# 7. Apply xmodmap and start xbindkeys
+# 9. Apply xmodmap and start xbindkeys
 xmodmap ~/.Xmodmap
 xbindkeys
 ```
@@ -469,6 +485,15 @@ gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-ac-action
 # 'suspend'
 gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-battery-action
 # 'suspend'
+```
+
+#### Suspend/Resume Hook
+
+`xbindkeys` loses its X11 key grabs after suspend/resume, which breaks brightness keys (F5/F6) and any other xbindkeys-bound keys. A system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) restarts xbindkeys and reapplies xmodmap after every resume:
+
+```bash
+sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/
+sudo chmod +x /usr/lib/systemd/system-sleep/99-xbindkeys.sh
 ```
 
 ### Bluetooth Power Saving

@@ -343,10 +343,43 @@ F8 (`XF86Display`) is handled by two scripts that provide both wired display swi
 
   If no external display is connected, shows a notification. State is tracked in `/tmp/.display_mode`.
 
-Install:
+#### Wireless Display Casting (GNOME Network Displays)
+
+Long-pressing F8 opens [GNOME Network Displays](https://github.com/GNOME/gnome-network-displays), the only actively maintained Miracast sender for Linux. It supports both Wi-Fi Direct (P2P) and MICE (Miracast over Infrastructure / existing Wi-Fi network). The Intel 8260 supports P2P and NetworkManager exposes the `p2p-dev-wlp1s0` device.
+
+**Roku/Hisense TV compatibility:** The apt version (0.92.1) has a bug where connections to Roku and Hisense TVs drop after 20-40 seconds due to missing keep-alive messages and incorrect RTCP port handling. This was fixed in [GND-482](https://github.com/GNOME/gnome-network-displays/commit/b61640a). However, versions 0.98.0+ require libadwaita >= 1.6.0 which is not available on Ubuntu 24.04.
+
+The solution is to build version 0.97.0 (compatible with libadwaita 1.5) with the Roku fix cherry-picked:
 
 ```bash
-sudo apt install gnome-network-displays
+# Install build dependencies
+sudo apt install meson ninja-build libgtk-4-dev libadwaita-1-dev libnm-dev \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstrtspserver-1.0-dev \
+  libpulse-dev libavahi-client-dev libavahi-gobject-dev libportal-gtk4-dev \
+  libprotobuf-c-dev libjson-glib-dev libsoup-3.0-dev
+
+# Clone, checkout 0.97.0, and cherry-pick the Roku fix
+git clone https://github.com/GNOME/gnome-network-displays.git
+cd gnome-network-displays
+git checkout -b build 0.97.0
+git cherry-pick cfc07e3   # Use correct URL for WFD keep-alive
+git cherry-pick b61640a   # Fix keep-alive and RTCP port handling for Roku/Hisense
+
+# Build and install to /usr/local
+meson setup builddir --prefix=/usr/local
+ninja -C builddir
+sudo ninja -C builddir install
+```
+
+The custom build installs to `/usr/local/bin/gnome-network-displays` and takes priority over the apt version in `/usr/bin/`.
+
+> **Why not Flatpak?** The Flatpak version (0.99.0) includes the Roku fix but its sandbox causes Avahi service resolution timeouts, preventing discovery of MICE sinks on the local network.
+
+> **Screen capture on Cinnamon:** The app shows a "Failed to create screencast session" warning because `xdg-desktop-portal-xapp` doesn't implement the ScreenCast portal. This is harmless — the app falls back to X11 screen capture (`ximagesrc`) automatically.
+
+Install scripts:
+
+```bash
 cp scripts/display-control.sh ~/.local/bin/
 cp scripts/display-switch.sh ~/.local/bin/
 chmod +x ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
@@ -392,9 +425,12 @@ All config files and scripts are in this repo under [`config/`](config/) and [`s
 sudo update-grub && sudo reboot
 
 # 2. Install dependencies
-sudo apt install xbindkeys gnome-network-displays python3-evdev
+sudo apt install xbindkeys python3-evdev
 
-# 3. Copy config files
+# 3. Build GNOME Network Displays with Roku fix (see "Wireless Display Casting" section)
+# Installs to /usr/local/bin/gnome-network-displays
+
+# 4. Copy config files
 cp config/.Xmodmap ~/
 cp config/.xbindkeysrc ~/
 cp config/apply-xmodmap.sh ~/.local/bin/
@@ -402,29 +438,29 @@ chmod +x ~/.local/bin/apply-xmodmap.sh
 cp config/xmodmap.desktop ~/.config/autostart/
 cp config/xbindkeys.desktop ~/.config/autostart/
 
-# 4. Install scripts
+# 5. Install scripts
 cp scripts/brightness.sh ~/.local/bin/
 cp scripts/display-control.sh ~/.local/bin/
 cp scripts/display-switch.sh ~/.local/bin/
 chmod +x ~/.local/bin/brightness.sh ~/.local/bin/display-control.sh ~/.local/bin/display-switch.sh
 
-# 5. Side volume buttons — gpio-volume service
+# 6. Side volume buttons — gpio-volume service
 sudo cp config/gpio-volume.py /usr/local/bin/
 sudo chmod +x /usr/local/bin/gpio-volume.py
 sudo cp config/gpio-volume.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gpio-volume
 
-# 6. Suspend/resume hook — restart xbindkeys after waking
+# 7. Suspend/resume hook — restart xbindkeys after waking
 sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/
 sudo chmod +x /usr/lib/systemd/system-sleep/99-xbindkeys.sh
 
-# 7. Disable Cinnamon's built-in brightness and display key handlers
+# 8. Disable Cinnamon's built-in brightness and display key handlers
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
 gsettings set org.cinnamon.desktop.keybindings.wm switch-monitor "['<Super>p']"
 
-# 8. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
+# 9. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
 dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
 
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
@@ -435,7 +471,7 @@ dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/name "'
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/command "'/home/shahmir/.local/bin/display-control.sh'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/binding "['XF86Display']"
 
-# 9. Apply xmodmap and start xbindkeys
+# 10. Apply xmodmap and start xbindkeys
 xmodmap ~/.Xmodmap
 xbindkeys
 ```

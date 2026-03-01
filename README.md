@@ -288,6 +288,10 @@ xbindkeys
 3. **F7 (brightness toggle) and F8 (display switch) are handled by Cinnamon custom keybindings:**
 
 ```bash
+# Remove XF86Display from Cinnamon's built-in switch-monitor binding
+# (otherwise it intercepts F8 before the custom keybinding can)
+gsettings set org.cinnamon.desktop.keybindings.wm switch-monitor "['<Super>p']"
+
 dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
 
 # F7 — brightness mute/unmute
@@ -415,9 +419,10 @@ sudo systemctl enable --now gpio-volume
 sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/
 sudo chmod +x /usr/lib/systemd/system-sleep/99-xbindkeys.sh
 
-# 7. Disable Cinnamon's built-in brightness key handler
+# 7. Disable Cinnamon's built-in brightness and display key handlers
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
+gsettings set org.cinnamon.desktop.keybindings.wm switch-monitor "['<Super>p']"
 
 # 8. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
 dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"

@@ -557,7 +557,7 @@ The lid switch still wakes the laptop normally — only USB-triggered wakes are 
 
 #### Suspend-then-Hibernate
 
-As a safety net against battery drain during long sleep, suspend is configured to automatically hibernate to disk after 30 minutes. This requires a swapfile at least as large as RAM.
+As a safety net against battery drain during long sleep, suspend is configured to automatically hibernate to disk after 5 minutes. This requires a swapfile at least as large as RAM.
 
 **1. Resize swap to match RAM (16 GB):**
 
@@ -588,7 +588,7 @@ sudo update-initramfs -u
 **3. Configure systemd sleep:**
 
 ```bash
-# Sleep config — hibernate after 30 min of suspend
+# Sleep config — hibernate after 5 min of suspend
 sudo mkdir -p /etc/systemd/sleep.conf.d
 sudo cp config/hibernate-after-suspend.conf /etc/systemd/sleep.conf.d/
 
@@ -602,12 +602,12 @@ sudo systemctl daemon-reload
 
 After reboot, every suspend (lid close, sleep button, manual) will:
 1. Enter S3 deep sleep immediately (low power)
-2. After 30 minutes, hibernate to disk (zero power)
+2. After 5 minutes, hibernate to disk (zero power)
 
 | Sleep Stage | Power Draw | Mechanism |
 |------------|-----------|-----------|
-| S3 (first 30 min) | Very low | Hardware suspend, CPU powered off |
-| S4 / Hibernate (after 30 min) | Zero | Saved to disk, fully powered off |
+| S3 (first 5 min) | Very low | Hardware suspend, CPU powered off |
+| S4 / Hibernate (after 5 min) | Zero | Saved to disk, fully powered off |
 
 #### Suspend/Resume Hook
 

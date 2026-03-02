@@ -455,12 +455,23 @@ sudo systemctl enable --now gpio-volume
 sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/
 sudo chmod +x /usr/lib/systemd/system-sleep/99-xbindkeys.sh
 
-# 8. Disable Cinnamon's built-in brightness and display key handlers
+# 8a. Disable USB wake to prevent spurious wakeups in backpack
+sudo cp config/disable-usb-wake.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable disable-usb-wake.service
+
+# 8b. Suspend-then-hibernate (requires 16GB swapfile — see Sleep section)
+sudo mkdir -p /etc/systemd/sleep.conf.d /etc/systemd/system/systemd-suspend.service.d
+sudo cp config/hibernate-after-suspend.conf /etc/systemd/sleep.conf.d/
+sudo cp config/suspend-then-hibernate.conf /etc/systemd/system/systemd-suspend.service.d/
+sudo systemctl daemon-reload
+
+# 9. Disable Cinnamon's built-in brightness and display key handlers
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-down "@as []"
 gsettings set org.cinnamon.desktop.keybindings.media-keys screen-brightness-up "@as []"
 gsettings set org.cinnamon.desktop.keybindings.wm switch-monitor "['<Super>p']"
 
-# 9. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
+# 10. Add custom keybindings for F7 (brightness toggle) and F8 (display switch)
 dconf write /org/cinnamon/desktop/keybindings/custom-list "['custom0','custom1']"
 
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom0/name "'Brightness Toggle'"
@@ -471,7 +482,7 @@ dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/name "'
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/command "'/home/shahmir/.local/bin/display-control.sh'"
 dconf write /org/cinnamon/desktop/keybindings/custom-keybindings/custom1/binding "['XF86Display']"
 
-# 10. Apply xmodmap and start xbindkeys
+# 11. Apply xmodmap and start xbindkeys
 xmodmap ~/.Xmodmap
 xbindkeys
 ```
@@ -491,11 +502,13 @@ The fix is the `mem_sleep_default=deep` kernel parameter, which forces S3 suspen
 
 ```bash
 # In /etc/default/grub:
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep resume=UUID=<root-uuid> resume_offset=<swapfile-offset>"
 
 sudo update-grub
 sudo reboot
 ```
+
+The `resume=` and `resume_offset=` parameters enable hibernate support (see "Suspend-then-Hibernate" below). If hibernate is not needed, they can be omitted.
 
 After reboot, verify:
 
@@ -527,6 +540,74 @@ gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-ac-action
 gsettings get org.cinnamon.settings-daemon.plugins.power lid-close-battery-action
 # 'suspend'
 ```
+
+#### Spurious Wake Prevention
+
+The USB host controller (`XHC`) is enabled as an ACPI wake source by default. In a closed laptop (e.g. in a backpack), phantom USB activity can wake the system from S3, causing it to run with the lid closed until the battery dies.
+
+Fix: disable `XHC` as a wake source on every boot via a systemd service ([`config/disable-usb-wake.service`](config/disable-usb-wake.service)):
+
+```bash
+sudo cp config/disable-usb-wake.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable disable-usb-wake.service
+```
+
+The lid switch still wakes the laptop normally — only USB-triggered wakes are blocked.
+
+#### Suspend-then-Hibernate
+
+As a safety net against battery drain during long sleep, suspend is configured to automatically hibernate to disk after 30 minutes. This requires a swapfile at least as large as RAM.
+
+**1. Resize swap to match RAM (16 GB):**
+
+```bash
+sudo swapoff /swapfile
+sudo fallocate -l 16G /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+# /etc/fstab already has /swapfile entry
+```
+
+**2. Configure kernel resume device:**
+
+```bash
+# Get the swapfile's physical offset:
+sudo filefrag -v /swapfile | head -5
+# Note the first physical_offset value (e.g. 75988992)
+
+# Add resume parameters to GRUB — append to GRUB_CMDLINE_LINUX_DEFAULT:
+#   resume=UUID=<root-partition-uuid> resume_offset=<physical_offset>
+sudo update-grub
+
+# Configure initramfs:
+echo "RESUME=UUID=<root-partition-uuid>" | sudo tee /etc/initramfs-tools/conf.d/resume
+sudo update-initramfs -u
+```
+
+**3. Configure systemd sleep:**
+
+```bash
+# Sleep config — hibernate after 30 min of suspend
+sudo mkdir -p /etc/systemd/sleep.conf.d
+sudo cp config/hibernate-after-suspend.conf /etc/systemd/sleep.conf.d/
+
+# Override suspend service to use suspend-then-hibernate
+# (Cinnamon calls systemctl suspend directly, bypassing logind HandleLidSwitch)
+sudo mkdir -p /etc/systemd/system/systemd-suspend.service.d
+sudo cp config/suspend-then-hibernate.conf /etc/systemd/system/systemd-suspend.service.d/
+
+sudo systemctl daemon-reload
+```
+
+After reboot, every suspend (lid close, sleep button, manual) will:
+1. Enter S3 deep sleep immediately (low power)
+2. After 30 minutes, hibernate to disk (zero power)
+
+| Sleep Stage | Power Draw | Mechanism |
+|------------|-----------|-----------|
+| S3 (first 30 min) | Very low | Hardware suspend, CPU powered off |
+| S4 / Hibernate (after 30 min) | Zero | Saved to disk, fully powered off |
 
 #### Suspend/Resume Hook
 

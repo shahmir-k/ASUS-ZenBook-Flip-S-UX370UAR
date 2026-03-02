@@ -1,0 +1,10 @@
+[Unit]
+Description=Disable USB (XHC) as suspend wake source
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'if grep -q "XHC.*enabled" /proc/acpi/wakeup; then echo XHC > /proc/acpi/wakeup; fi'
+
+[Install]
+WantedBy=multi-user.target

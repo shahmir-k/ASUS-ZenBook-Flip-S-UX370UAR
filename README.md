@@ -1089,6 +1089,32 @@ Desktop ricing is managed in a separate repo: [shahmir-k/linux-mint-ricing](http
   <img src="images/desktop.png" width="700" alt="Desktop screenshot">
 </p>
 
+## GRUB Theme
+
+Linux Mint defaults to `GRUB_TIMEOUT_STYLE=hidden` and `GRUB_TIMEOUT=0`, which skips the GRUB menu entirely. Installing a GRUB theme alone (e.g. [CyberXero](https://github.com/Jeandre-jpg/CyberXero)) won't make it visible — the timeout settings must also be changed.
+
+### Fix
+
+Edit `/etc/default/grub` and set:
+
+```
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TIMEOUT=5
+```
+
+Then regenerate the config:
+
+```bash
+sudo update-grub
+```
+
+### Full Steps
+
+1. Download/clone the theme (e.g. CyberXero) and run its `install.sh` as root — this copies theme files to `/boot/grub/themes/` and adds `GRUB_THEME=` to `/etc/default/grub`
+2. Manually edit `/etc/default/grub` to change `GRUB_TIMEOUT_STYLE=hidden` to `menu` and `GRUB_TIMEOUT=0` to `5` (the install script doesn't touch these)
+3. Run `sudo update-grub`
+4. Reboot
+
 ## Tools Reference
 
 | Tool | Use |

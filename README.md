@@ -822,18 +822,24 @@ evdev is only useful as a fallback if both libinput and Synaptics fail. Not reco
 
 ### Switching Drivers
 
-To switch from Synaptics back to libinput:
+Both drivers can stay installed at the same time. The Synaptics config file at `/etc/X11/xorg.conf.d/70-synaptics.conf` takes priority over libinput's `40-libinput.conf` (higher number loads last). To switch, just move the Synaptics config out of the way and log out/in.
+
+**Switch to libinput:**
 ```bash
-sudo rm /etc/X11/xorg.conf.d/70-synaptics.conf
-sudo apt remove xserver-xorg-input-synaptics
+sudo mv /etc/X11/xorg.conf.d/70-synaptics.conf /etc/X11/xorg.conf.d/70-synaptics.conf.bak
 # Log out and back in
 ```
 
-To switch from libinput to Synaptics:
+**Switch back to Synaptics:**
 ```bash
-sudo apt install xserver-xorg-input-synaptics
-# Create /etc/X11/xorg.conf.d/70-synaptics.conf (see config above)
+sudo mv /etc/X11/xorg.conf.d/70-synaptics.conf.bak /etc/X11/xorg.conf.d/70-synaptics.conf
 # Log out and back in
+```
+
+**Verify active driver after login:**
+```bash
+xinput list-props "ELAN1200:00 04F3:3058 Touchpad" | head -5
+# Synaptics props start with "Synaptics", libinput props start with "libinput"
 ```
 
 ## Fingerprint Sensor

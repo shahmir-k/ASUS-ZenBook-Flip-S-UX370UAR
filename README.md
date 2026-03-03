@@ -1108,6 +1108,10 @@ Then regenerate the config:
 sudo update-grub
 ```
 
+### Note on `quick_boot`
+
+`/etc/grub.d/00_header` hardcodes `quick_boot="1"`. When `GRUB_TIMEOUT_STYLE` is **unset** and `GRUB_HIDDEN_TIMEOUT` is set, this forces GRUB into the deprecated hidden timeout path (countdown or hidden style instead of menu). In Mint's case, `GRUB_TIMEOUT_STYLE=hidden` is explicitly set so `quick_boot` isn't the direct cause — but if you ever clear `GRUB_TIMEOUT_STYLE` without also unsetting `GRUB_HIDDEN_TIMEOUT`, `quick_boot` will silently hide the menu again.
+
 ### Full Steps
 
 1. Download/clone the theme (e.g. CyberXero) and run its `install.sh` as root — this copies theme files to `/boot/grub/themes/` and adds `GRUB_THEME=` to `/etc/default/grub`

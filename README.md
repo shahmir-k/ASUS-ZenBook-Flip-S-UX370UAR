@@ -625,9 +625,17 @@ sudo reboot
 
 PSR saves a negligible amount of power by letting the display panel refresh from its own buffer. Disabling it has no noticeable impact on battery life.
 
+#### Rotated Display Freeze on Hibernate Resume
+
+If the display is rotated (e.g. by auto-rotation in tablet mode) when the laptop enters suspend/hibernate, the i915 driver fails to restore the rotated framebuffer on resume — resulting in a black screen with cursor and a frozen display. Even with PSR disabled, the driver can't reinitialize the display engine in a non-normal orientation after S4.
+
+Fix: the system-sleep hook resets rotation to normal before sleep so the GPU always resumes in a known-good state. Auto-rotate will pick up the correct orientation again after resume.
+
 #### Suspend/Resume Hook
 
-`xbindkeys` loses its X11 key grabs after suspend/resume, which breaks brightness keys (F5/F6) and any other xbindkeys-bound keys. A system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) restarts xbindkeys and reapplies xmodmap after every resume:
+The system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) handles two issues:
+- **Pre-sleep:** resets display rotation to normal (prevents i915 freeze on hibernate resume with rotated display)
+- **Post-resume:** restarts xbindkeys and reapplies xmodmap (xbindkeys loses X11 key grabs after suspend/resume, breaking brightness keys F5/F6)
 
 ```bash
 sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/

@@ -255,13 +255,15 @@ cp config/.Xmodmap ~/.Xmodmap
 xmodmap ~/.Xmodmap
 ```
 
-Autostart entry (`~/.config/autostart/xmodmap.desktop`) uses [`apply-xmodmap.sh`](config/apply-xmodmap.sh) which waits for the `volume-buttons` virtual device (created by `gpio-volume.service`) to appear before applying xmodmap — because X11 resets xmodmap whenever a new keyboard device is detected:
+Autostart entry (`~/.config/autostart/xmodmap.desktop`) uses [`apply-xmodmap.sh`](config/apply-xmodmap.sh) which waits for the `volume-buttons` virtual device (created by `gpio-volume.service`) to appear before applying xmodmap — because X11 resets xmodmap whenever a new keyboard device is detected. After applying xmodmap, it restarts xbindkeys so that it grabs the remapped keysyms:
 
 ```bash
 cp config/apply-xmodmap.sh ~/.local/bin/
 chmod +x ~/.local/bin/apply-xmodmap.sh
 cp config/xmodmap.desktop ~/.config/autostart/
 ```
+
+> **Boot ordering:** `apply-xmodmap.sh` must restart xbindkeys after applying xmodmap. Without this, xbindkeys starts before xmodmap runs and grabs the default keysyms (F5/F6) instead of the remapped ones (XF86MonBrightnessDown/Up) — so brightness keys silently fail on every boot. Volume keys are unaffected because Cinnamon handles those natively.
 
 #### Solution Part 3: Brightness Control via `xbindkeys` + D-Bus
 

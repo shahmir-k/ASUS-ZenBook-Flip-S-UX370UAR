@@ -502,7 +502,7 @@ The fix is the `mem_sleep_default=deep` kernel parameter, which forces S3 suspen
 
 ```bash
 # In /etc/default/grub:
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep resume=UUID=<root-uuid> resume_offset=<swapfile-offset>"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep resume=UUID=<root-uuid> resume_offset=<swapfile-offset> i915.enable_psr=0"
 
 sudo update-grub
 sudo reboot
@@ -608,6 +608,22 @@ After reboot, every suspend (lid close, sleep button, manual) will:
 |------------|-----------|-----------|
 | S3 (first 5 min) | Very low | Hardware suspend, CPU powered off |
 | S4 / Hibernate (after 5 min) | Zero | Saved to disk, fully powered off |
+
+#### GPU Freeze on Hibernate Resume (i915 PSR)
+
+The Intel UHD 620 (Kaby Lake) GPU freezes on hibernate resume due to Panel Self Refresh (PSR). The i915 driver fails to properly restore the display engine's power state after S4, causing the compositor to hang at the lock screen. The kernel logs `ungated DDI clock` warnings on the DDI encoders during resume.
+
+Fix: disable PSR via kernel parameter:
+
+```bash
+# Append to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub:
+i915.enable_psr=0
+
+sudo update-grub
+sudo reboot
+```
+
+PSR saves a negligible amount of power by letting the display panel refresh from its own buffer. Disabling it has no noticeable impact on battery life.
 
 #### Suspend/Resume Hook
 

@@ -504,7 +504,7 @@ The fix is the `mem_sleep_default=deep` kernel parameter, which forces S3 suspen
 
 ```bash
 # In /etc/default/grub:
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep resume=UUID=<root-uuid> resume_offset=<swapfile-offset> i915.enable_psr=0"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash dis_ucode_ldr acpi_osi=  mem_sleep_default=deep resume=UUID=<root-uuid> resume_offset=<swapfile-offset> i915.enable_psr=0 i915.enable_dc=0"
 
 sudo update-grub
 sudo reboot
@@ -611,33 +611,46 @@ After reboot, every suspend (lid close, sleep button, manual) will:
 | S3 (first 5 min) | Very low | Hardware suspend, CPU powered off |
 | S4 / Hibernate (after 5 min) | Zero | Saved to disk, fully powered off |
 
-#### GPU Freeze on Hibernate Resume (i915 PSR)
+#### Hibernate Resume Fixes (i915 + Intel Sensor Hub)
 
-The Intel UHD 620 (Kaby Lake) GPU freezes on hibernate resume due to Panel Self Refresh (PSR). The i915 driver fails to properly restore the display engine's power state after S4, causing the compositor to hang at the lock screen. The kernel logs `ungated DDI clock` warnings on the DDI encoders during resume.
+Two issues cause system freezes on hibernate (S4) resume:
 
-Fix: disable PSR via kernel parameter:
+**1. i915 GPU display engine failure**
+
+The Intel UHD 620 (Kaby Lake) fails to restore the display after S4. Two kernel parameters are needed:
+
+- `i915.enable_psr=0` — disables Panel Self Refresh, which the driver can't restore after S4
+- `i915.enable_dc=0` — disables display C-states (DC5/DC6), which prevents the DDI A encoder (eDP-1) from entering an unrecoverable state on S4 resume
 
 ```bash
 # Append to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub:
-i915.enable_psr=0
+i915.enable_psr=0 i915.enable_dc=0
 
 sudo update-grub
 sudo reboot
 ```
 
-PSR saves a negligible amount of power by letting the display panel refresh from its own buffer. Disabling it has no noticeable impact on battery life.
+Both save negligible power. PSR lets the panel refresh from its own buffer. DC states are low-power display idle states. Disabling them has no noticeable impact on battery life.
 
-#### Rotated Display Freeze on Hibernate Resume
+Additionally, if the display is rotated (e.g. by auto-rotation in tablet mode) when entering hibernate, the i915 driver can't restore the rotated framebuffer — resulting in a black screen. The sleep hook resets rotation to normal before sleep.
 
-If the display is rotated (e.g. by auto-rotation in tablet mode) when the laptop enters suspend/hibernate, the i915 driver fails to restore the rotated framebuffer on resume — resulting in a black screen with cursor and a frozen display. Even with PSR disabled, the driver can't reinitialize the display engine in a non-normal orientation after S4.
+**2. Intel Sensor Hub (ISH) hang**
 
-Fix: the system-sleep hook resets rotation to normal before sleep so the GPU always resumes in a known-good state. Auto-rotate will pick up the correct orientation again after resume.
+The Intel ISH (`intel_ishtp`, `intel_ish_ipc`, `intel_ishtp_hid`) handles the accelerometer and hinge angle sensor. It reinitializes fine after S3 suspend but **hangs on S4 hibernate resume**, causing a hard system freeze within seconds of resume. No kernel error is logged — the system simply stops responding.
+
+Fix: the sleep hook unloads the ISH modules before sleep and reloads them after resume.
 
 #### Suspend/Resume Hook
 
-The system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) handles two issues:
-- **Pre-sleep:** resets display rotation to normal (prevents i915 freeze on hibernate resume with rotated display)
-- **Post-resume:** restarts xbindkeys and reapplies xmodmap (xbindkeys loses X11 key grabs after suspend/resume, breaking brightness keys F5/F6)
+The system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) handles all suspend/hibernate issues:
+
+**Pre-sleep:**
+- Resets display rotation to normal (prevents i915 freeze with rotated framebuffer)
+- Unloads Intel ISH modules (prevents hard freeze on S4 resume)
+
+**Post-resume:**
+- Reloads Intel ISH modules (restores accelerometer and hinge sensor)
+- Restarts xbindkeys and reapplies xmodmap (xbindkeys loses X11 key grabs after suspend/resume, breaking brightness keys F5/F6)
 
 ```bash
 sudo cp config/99-xbindkeys.sh /usr/lib/systemd/system-sleep/

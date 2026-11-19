@@ -145,9 +145,9 @@ sudo make install
 Configure `/etc/intel-undervolt.conf` with the stable values determined through testing:
 
 ```
-undervolt 0 'CPU' -100
-undervolt 1 'GPU' -80
-undervolt 2 'CPU Cache' -100
+undervolt 0 'CPU' -70
+undervolt 1 'GPU' -60
+undervolt 2 'CPU Cache' -70
 undervolt 3 'System Agent' 0
 undervolt 4 'Analog I/O' 0
 ```
@@ -172,7 +172,7 @@ Stability was verified with `stress-ng`:
 stress-ng --cpu 0 --cpu-method all --timeout 2m --metrics-brief
 ```
 
-> **Note:** -120 mV on core/cache caused a crash on this chip. -100 mV passed stress testing with 0 failures, leaving a 20 mV margin from the instability threshold.
+> **Note:** -120 mV on core/cache caused a crash on this chip. -100 mV passed a 2-minute `stress-ng` run but was **not stable in daily use** — it crashed roughly once every few days, with `mce: [Hardware Error]: Machine check events logged` in the kernel log just before each crash (`sudo journalctl -k -b -1 | grep -i mce`). Short stress tests don't catch marginal instability. Backed off to -70 mV core/cache and -60 mV GPU. If that holds for a week or more, -85 mV is worth trying; don't return to -100.
 
 ### Fn / Media Key Remapping
 

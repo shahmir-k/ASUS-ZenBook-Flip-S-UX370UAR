@@ -1005,7 +1005,7 @@ sudo systemctl restart touchegg
 
 ### Auto-Rotation
 
-The accelerometer (`HID-SENSOR-200073`, `iio:device1`) is exposed by `iio-sensor-proxy` as orientation events. The [`scripts/auto-rotate.sh`](scripts/auto-rotate.sh) script monitors these events and:
+The accelerometer (`HID-SENSOR-200073`, IIO device named `accel_3d`) is exposed by `iio-sensor-proxy` as orientation events. The [`scripts/auto-rotate.sh`](scripts/auto-rotate.sh) script monitors these events and:
 
 1. Rotates the display via `xrandr --output eDP-1 --rotate <direction>`
 2. Remaps touchscreen and stylus input coordinates via `xinput` coordinate transformation matrices to keep touch aligned with the rotated display
@@ -1035,7 +1035,7 @@ monitor-sensor
 
 ### Tablet Mode Detection
 
-The hinge angle sensor (`HID-SENSOR-INT-020b`, `iio:device0`) reports the lid angle in degrees via sysfs. The [`scripts/tablet-mode.sh`](scripts/tablet-mode.sh) daemon polls this value every second and toggles tablet mode based on the angle:
+The hinge angle sensor (`HID-SENSOR-INT-020b`, IIO device named `hinge`) reports the lid angle in degrees via sysfs. The [`scripts/tablet-mode.sh`](scripts/tablet-mode.sh) daemon polls this value every second and toggles tablet mode based on the angle:
 
 - **Enter tablet mode** (angle > 190°): disables keyboard and touchpad, launches Onboard on-screen keyboard, increases UI scaling
 - **Exit tablet mode** (angle < 170°): re-enables keyboard and touchpad, hides Onboard, restores UI scaling
@@ -1043,7 +1043,7 @@ The hinge angle sensor (`HID-SENSOR-INT-020b`, `iio:device0`) reports the lid an
 
 ```bash
 # Read the hinge angle:
-cat /sys/bus/iio/devices/iio:device0/in_angl0_raw
+cat $(dirname $(grep -l "^hinge$" /sys/bus/iio/devices/iio:device*/name))/in_angl0_raw
 # Example output: 113 (degrees, normal laptop use)
 
 # Check current state:
@@ -1170,9 +1170,9 @@ sudo apt install touchegg onboard xournalpp krita iio-sensor-proxy
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  Sensors                                                         │
-│    ├── Accelerometer (iio:device1) → iio-sensor-proxy            │
+│    ├── Accelerometer (iio "accel_3d") → iio-sensor-proxy         │
 │    │    └── monitor-sensor → auto-rotate.sh                      │
-│    └── Hinge angle (iio:device0) → sysfs in_angl0_raw           │
+│    └── Hinge angle (iio "hinge") → sysfs in_angl0_raw            │
 │         └── tablet-mode.sh daemon (polls every 1s)               │
 ├──────────────────────────────────────────────────────────────────┤
 │  Auto-Rotation (auto-rotate.sh)                                  │

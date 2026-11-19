@@ -7,7 +7,7 @@
 #        tablet-mode.sh toggle   (manual toggle)
 #        tablet-mode.sh status   (print current state)
 
-HINGE_SENSOR="/sys/bus/iio/devices/iio:device0/in_angl0_raw"
+# IIO device numbers change between boots and after ISH reloads, so find the hinge by name
 STATE_FILE="/tmp/.tablet_mode"
 LOCK_FILE="/tmp/.tablet-mode.lock"
 THRESHOLD_ENTER=190    # Enter tablet mode above this angle
@@ -59,7 +59,13 @@ exit_tablet_mode() {
 }
 
 get_angle() {
-    cat "$HINGE_SENSOR" 2>/dev/null || echo "0"
+    local dev
+    for dev in /sys/bus/iio/devices/iio:device*; do
+        if [ "$(cat "$dev/name" 2>/dev/null)" = "hinge" ]; then
+            cat "$dev/in_angl0_raw" 2>/dev/null && return
+        fi
+    done
+    echo "0"
 }
 
 case "${1:-daemon}" in

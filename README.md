@@ -613,7 +613,7 @@ After reboot, every suspend (lid close, sleep button, manual) will:
 
 #### Hibernate Resume Fixes (i915 + Intel Sensor Hub)
 
-Two issues cause system freezes on hibernate (S4) resume:
+Three issues cause problems on hibernate (S4) resume:
 
 **1. i915 GPU display engine failure**
 
@@ -640,16 +640,25 @@ The Intel ISH (`intel_ishtp`, `intel_ish_ipc`, `intel_ishtp_hid`) handles the ac
 
 Fix: the sleep hook unloads the ISH modules before sleep and reloads them after resume.
 
+**3. Cinnamon compositor (muffin) frozen after S4 resume**
+
+After the ISH and i915 fixes prevent the hard freeze, the system resumes but the Cinnamon desktop is unresponsive — the cursor moves (X11/hardware cursor works) but clicking, typing, and the panel don't respond. This happens because muffin (Cinnamon's compositor/window manager) loses its OpenGL rendering context during S4. Unlike S3 suspend where GPU state is preserved in RAM, S4 hibernate writes everything to disk and the GPU context restoration is incomplete.
+
+Fix: the sleep hook restarts Cinnamon (`cinnamon --replace`) after hibernate resume, then re-locks the screen for security.
+
 #### Suspend/Resume Hook
 
 The system-sleep hook ([`config/99-xbindkeys.sh`](config/99-xbindkeys.sh)) handles all suspend/hibernate issues:
+
+All commands have `timeout` guards to prevent the hook from hanging and freezing the system. Logs are written to syslog via `logger -t sleep-hook` — check with `journalctl -t sleep-hook`.
 
 **Pre-sleep:**
 - Resets display rotation to normal (prevents i915 freeze with rotated framebuffer)
 - Unloads Intel ISH modules (prevents hard freeze on S4 resume)
 
 **Post-resume:**
-- Reloads Intel ISH modules (restores accelerometer and hinge sensor)
+- Reloads Intel ISH modules with timeouts (ISH hardware can fail to reinitialize after S4)
+- Spawns a detached background process that restarts Cinnamon compositor (`cinnamon --replace`) — muffin loses its OpenGL/GPU rendering context after S4 hibernate, causing a frozen desktop where the cursor moves but the DE is unresponsive. After restarting the compositor, re-locks the screen for security.
 - Restarts xbindkeys and reapplies xmodmap (xbindkeys loses X11 key grabs after suspend/resume, breaking brightness keys F5/F6)
 
 ```bash
@@ -664,9 +673,62 @@ rfkill block bluetooth    # Disable when not in use
 rfkill unblock bluetooth  # Re-enable
 ```
 
+## Microphone
+
+The laptop has an array microphone (Realtek ALC295 codec, subsystem `0x10431b60`) on HDA pin 0x12. It works out of the box but **defaults to massively over-amplified gain** that causes clipping and makes speech sound thin and distant.
+
+### The Problem
+
+The default ALSA mixer levels set both `Internal Mic Boost` and `Capture Volume` to 100% — a total of 60dB gain. This causes **78% of audio samples to clip** (hit the digital ceiling), producing distorted audio that paradoxically sounds quiet and far away. Windows hides this with Realtek DSP processing (noise reduction, AGC, beam forming). Linux has no such processing by default.
+
+### Fix: Reduce Gain
+
+Set the mic's PipeWire source volume to **40%**:
+
+```bash
+pactl set-source-volume @DEFAULT_SOURCE@ 40%
+sudo alsactl store
+```
+
+This brings total gain from 60dB down to ~30dB (Boost 0, Capture 30dB), which eliminates clipping and produces a clean signal. WirePlumber saves the volume in `~/.local/state/wireplumber/default-routes`, so it persists across reboots and suspend.
+
+> **Why not `amixer`?** PipeWire's ALSA mixer path folds `Internal Mic Boost` and `Capture` into the single source volume and rewrites both whenever it sets or restores that volume, so any `amixer` change is overwritten. It lowers Boost first, then Capture:
+>
+> | Source volume | Boost | Capture |
+> |---|---|---|
+> | 100% (default) | 3 (30dB) | 30dB |
+> | 80% | 2 (20dB) | 30dB |
+> | 60% | 1 (10dB) | 30dB |
+> | **40%** | **0** | **30dB** |
+>
+> Changing the mic volume in the sound settings changes the hardware gain the same way, so don't push it back to 100%.
+
+### Optional: EasyEffects for Voice Enhancement
+
+For Windows-like voice processing (noise reduction, voice compression), install EasyEffects:
+
+```bash
+sudo apt install easyeffects
+```
+
+A microphone preset is included at [`config/mic-enhance.json`](config/mic-enhance.json). Copy it to `~/.config/easyeffects/input/` and load it from the EasyEffects Input tab. It applies:
+
+- High-pass filter at 80Hz (removes rumble)
+- Noise gate at -45dB (cuts background noise)
+- Upward compressor at 3:1 ratio with 6dB makeup gain (brings up quiet speech)
+- Limiter at -1dB (prevents clipping)
+
+Enable "Launch as a service at startup" in EasyEffects settings to keep it active.
+
+### What Doesn't Work
+
+- `model=laptop-dmic` — changes codec routing but breaks volume controls
+- Firmware patch to override Pin 0x1d — codec throws "SKU not ready" and ignores it
+- hda-verb coefficient writes (coef 0x45) — causes scratchy distorted audio
+
 ## Touchpad
 
-The laptop has an ELAN1200 (04F3:3058) touchpad connected via I2C. There are three X11 input drivers available on Linux. This system uses **Synaptics**.
+The laptop has an ELAN1200 (04F3:3058) touchpad connected via I2C. There are three X11 input drivers available on Linux. This system uses **libinput**.
 
 ### Driver Comparison
 
@@ -726,7 +788,7 @@ xinput set-prop <id> "libinput Scrolling Pixel Distance" 15
 
 ---
 
-#### Synaptics (currently active)
+#### Synaptics
 
 The legacy driver with the most configuration options. Better acceleration feel on some hardware.
 
@@ -826,11 +888,12 @@ evdev is only useful as a fallback if both libinput and Synaptics fail. Not reco
 
 ### Which Driver to Use
 
+**libinput is the recommended driver.** It handles scrolling correctly with remote desktop applications (RustDesk, etc.), is actively maintained, and works on both X11 and Wayland. Synaptics is a legacy driver that causes scroll speed issues in some applications — notably RustDesk, where Synaptics scroll events are too fast and can't be tuned per-app.
+
 | Use case | Driver |
 |----------|--------|
-| Default / Wayland / minimal config | libinput |
-| Want fine-grained acceleration and scroll tuning on X11 | Synaptics |
-| Planning to switch to Wayland in the future | libinput |
+| **Recommended for all use cases** | **libinput** |
+| Fine-grained acceleration tuning on X11 (legacy) | Synaptics |
 | Fallback only | evdev |
 
 ### Switching Drivers
@@ -854,6 +917,22 @@ sudo mv /etc/X11/xorg.conf.d/70-synaptics.conf.bak /etc/X11/xorg.conf.d/70-synap
 xinput list-props "ELAN1200:00 04F3:3058 Touchpad" | head -5
 # Synaptics props start with "Synaptics", libinput props start with "libinput"
 ```
+
+## RustDesk (Remote Desktop)
+
+RustDesk works well on this hardware. The only issue is **touchpad scroll speed** — by default, scroll is too slow when remoting into a Windows PC from the Linux client.
+
+### Scroll Speed Fix
+
+The `trackpad-speed` setting in RustDesk 1.4.0+ fixes this. Adjust it via the **GUI** during an active remote session:
+
+1. Open the toolbar menu in the remote session
+2. Find **"Trackpad speed"** — it opens a slider (range 10–1000, default 100)
+3. Increase to taste (300–500 works well)
+
+The setting is saved per-peer. The CLI option (`rustdesk --option trackpad-speed`) does NOT work on Linux due to a Flutter limitation — use the GUI slider instead.
+
+> **Note:** This was only an issue after switching from Synaptics to libinput. On Synaptics the scroll was too fast in RustDesk. libinput + the trackpad-speed slider gives the best result.
 
 ## Fingerprint Sensor
 
